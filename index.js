@@ -61,16 +61,12 @@ builder.defineStreamHandler(async (args) => {
 });
 
 const express = require('express');
-const createTorrentServer = require('./torrentServer');
 
 // Create the main Express app
 const app = express();
 
 // Mount Stremio addon at /stremio
 serveHTTP(builder.getInterface(), { port: 7000 });
-
-// Mount torrent server at root
-app.use('/torrent', createTorrentServer(zamunda));
 
 // Start HTTP server
 app.listen(7000, () => {
