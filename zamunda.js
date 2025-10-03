@@ -278,6 +278,11 @@ class ZamundaAPI {
                 // Step 1: Check for cached torrent file
                 let finalUrl = await this.torrentManager.getLocalFileUrl(torrent.url);
                 let localPath;
+
+                // Extract resolution from torrent title
+                const resMatch = torrent.url.match(/\b(720p|1080p|2160p|4K)\b/i);
+                const resolution = resMatch ? resMatch[1] : 'Unknown';
+                torrent.resolution = resolution;
                 
                 // Step 2: Get or download the torrent file
                 if (!finalUrl) {
@@ -298,7 +303,7 @@ class ZamundaAPI {
                 
                 // Step 4: Create Stremio stream object
                 streams.push({
-                    name: 'zamunda',
+                    name: `zamunda\n${torrent.resolution}`,
                     title: torrent.title+`👤${torrent.seeders || 'Unknown'} 💾 ${torrent.size || 'Unknown'}`,
                     infoHash: parsedTorrent.infoHash,
                     type: 'stream'
@@ -307,7 +312,7 @@ class ZamundaAPI {
                 // Step 5: Fallback handling
                 console.error(`Error processing torrent: ${error.message}`);
                 streams.push({
-                    name: 'zamunda',
+                    name: `zamunda\n${torrent.resolution}`,
                     title: torrent.title,
                     url: torrent.url,
                     type: 'movie'
