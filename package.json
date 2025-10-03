@@ -1,0 +1,19 @@
+{
+  "name": "stremio-zamunda-addon",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "axios-cookiejar-support": "^4.0.7",
+    "cheerio": "^1.1.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "fs": "^0.0.1-security",
+    "magnet-uri": "^7.0.7",
+    "node-fetch": "^2.6.1",
+    "parse-torrent": "^9.1.5",
+    "stremio-addon-sdk": "^1.6.10",
+    "tough-cookie": "^4.1.4"
+  }
+}
