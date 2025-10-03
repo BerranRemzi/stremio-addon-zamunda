@@ -287,7 +287,7 @@ class ZamundaAPI {
 		const tasks = torrents.map((torrent) => withLimit(async () => {
 			try {
 				// Prefer resolution from URL (torrent name)
-				const resMatch = (torrent.url || '').match(/\b(720p|1080p|2160p|4K)\b/i);
+				const resMatch = (torrent.url || '').match(/\b(480p|720p|1080p|2160p|4K)\b/i);
 				const resolution = resMatch ? resMatch[1] : 'Unknown';
 
 				// Ensure we have local torrent file path
