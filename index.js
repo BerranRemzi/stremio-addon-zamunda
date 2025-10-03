@@ -27,6 +27,24 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
+// Simple in-memory OMDB cache to reduce duplicate requests during browsing
+const omdbCache = new Map();
+const OMDB_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+function getCachedOmdb(id) {
+    const entry = omdbCache.get(id);
+    if (!entry) return null;
+    if (Date.now() - entry.t > OMDB_TTL_MS) {
+        omdbCache.delete(id);
+        return null;
+    }
+    return entry.v;
+}
+
+function setCachedOmdb(id, value) {
+    omdbCache.set(id, { v: value, t: Date.now() });
+}
+
 builder.defineStreamHandler(async (args) => {
     let title = "Unknown Title";
 
@@ -34,9 +52,13 @@ builder.defineStreamHandler(async (args) => {
     const imdbId = args.id.split(":")[0];
 
     try {
-        // Get movie title from OMDB
-        const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_API_KEY}`);
-        const data = await res.json();
+        // Get movie title from OMDB (with cache)
+        let data = getCachedOmdb(imdbId);
+        if (!data) {
+            const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_API_KEY}`);
+            data = await res.json();
+            if (data && data.Response !== 'False') setCachedOmdb(imdbId, data);
+        }
         if (data && data.Title) {
             title = `${data.Title} ${data.Year}`;
         }
@@ -45,7 +67,6 @@ builder.defineStreamHandler(async (args) => {
         const torrents = await zamunda.searchByTitle(title);
         if (torrents.length > 0) {
             console.log(`Found ${torrents.length} torrents for ${title} (${imdbId})`);
-            //torrents.forEach(torrent => console.log(`Torrent link: ${torrent.url}`));
             
             // Format streams with local torrent files
             const streams = await zamunda.formatTorrentsAsStreams(torrents);
@@ -60,17 +81,9 @@ builder.defineStreamHandler(async (args) => {
     }
 });
 
-const express = require('express');
+// Serve the addon HTTP interface on a single port
+const PORT = Number(process.env.PORT || 7000);
+serveHTTP(builder.getInterface(), { port: PORT });
 
-// Create the main Express app
-const app = express();
-
-// Mount Stremio addon at /stremio
-serveHTTP(builder.getInterface(), { port: 7000 });
-
-// Start HTTP server
-app.listen(7000, () => {
-    console.log("Zamunda Stremio addon running at:");
-    console.log("- Addon: http://127.0.0.1:7000/manifest.json");
-    console.log("- Torrent browser: http://127.0.0.1:7000/torrent")
-});
+console.log("Zamunda Stremio addon running at:");
+console.log(`- Addon: http://127.0.0.1:${PORT}/manifest.json`);
