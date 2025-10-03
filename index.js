@@ -38,9 +38,9 @@ builder.defineStreamHandler(async (args) => {
         const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_API_KEY}`);
         const data = await res.json();
         if (data && data.Title) {
-            title = data.Title;// + (data.Year ? ` ${data.Year}` : '');
+            title = `${data.Title} ${data.Year}`;
         }
-
+        
         // Search for torrents on Zamunda
         const torrents = await zamunda.searchByTitle(title);
         if (torrents.length > 0) {

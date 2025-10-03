@@ -213,9 +213,7 @@ class ZamundaAPI {
             const results = await this.search(movieTitle);
             
             // Filter results that might match the IMDB ID (you might want to improve this matching)
-            const matches = results.filter(movie => 
-                movie.title.toLowerCase().includes(movieTitle.toLowerCase())
-            );
+            const matches = results;
 
             if (matches.length > 0) {
                 // Convert matches directly to torrents
