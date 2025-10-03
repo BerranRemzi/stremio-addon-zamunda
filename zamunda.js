@@ -154,6 +154,16 @@ class ZamundaAPI {
                 }
             });
 
+            // Find and add seeders count
+            $('td.tddownloaded center font a').each((i, elem) => {
+                if (i < movies.length) {
+                    const seeders = $(elem).find('b').text();
+                    if (seeders) {
+                        movies[i].seeders = parseInt(seeders, 10) || 0;
+                    }
+                }
+            });
+
             console.log(`Found ${movies.length} movies`);
             return movies;
         } catch (error) {
@@ -222,7 +232,7 @@ class ZamundaAPI {
                         title: `${movie.title}\n`,
                         url: movie.torrentUrl,
                         size: 'Unknown', // You could add size parsing if available
-                        seeders: 'Unknown', // You could add seeders parsing if available
+                        seeders: movie.seeders, // You could add seeders parsing if available
                         leechers: 'Unknown' // You could add leechers parsing if available
                     }));
                 return torrents;
@@ -283,7 +293,7 @@ class ZamundaAPI {
                 const torrentData = fs.readFileSync(localPath);
                 const parsedTorrent = parseTorrent(torrentData);
                 //"👤${movie.seeders || 'Unknown'} 💾 ${movie.size || 'Unknown'}"
-                torrent.seeders = parsedTorrent.seeders;
+                //torrent.seeders = parsedTorrent.seeders;
                 torrent.size = `${(parsedTorrent.length / (1024*1024*1024)).toFixed(2)} GB`;
                 
                 // Step 4: Create Stremio stream object
