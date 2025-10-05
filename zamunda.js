@@ -107,7 +107,7 @@ class ZamundaAPI {
 
 			const searchUrl = `${this.config.baseUrl}/catalogs/movies?letter=&t=movie&search=${encodeURIComponent(query).replace(/%20/g, '+')}&field=name&comb=yes`;
 			
-			console.log('Searching:', searchUrl);
+			console.log('Searching:', query);
 
 			const response = await this.client.get(searchUrl, {
 				headers: {
@@ -164,7 +164,7 @@ class ZamundaAPI {
 				}
 			});
 
-			console.log(`Found ${movies.length} movies`);
+			//console.log(`Found ${movies.length} movies`);
 			return movies;
 		} catch (error) {
 			console.error('Error searching Zamunda:', error.message);
