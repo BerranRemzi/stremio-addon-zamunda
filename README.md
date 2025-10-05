@@ -15,5 +15,5 @@ Stream movies from Zamunda.net in Stremio. This addon enables searching and stre
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/stremio-addon-zamunda.git
+git clone https://github.com/BerranRemzi/stremio-addon-zamunda.git
 cd stremio-addon-zamunda
