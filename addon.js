@@ -1,4 +1,4 @@
-const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
+const { addonBuilder } = require("stremio-addon-sdk");
 const fetch = require("node-fetch");
 const ZamundaAPI = require('./zamunda');
 require('dotenv').config();
@@ -14,7 +14,7 @@ const zamunda = new ZamundaAPI({
 
 const manifest = {
     id: "net.zamunda.stremio",
-    version: "1.0.0",
+    version: "0.1.0",
     name: "Zamunda Stremio Addon",
     description: "Stream torrents from Zamunda.net",
     types: ["movie"],
@@ -81,9 +81,4 @@ builder.defineStreamHandler(async (args) => {
     }
 });
 
-// Serve the addon HTTP interface on a single port
-const PORT = Number(process.env.PORT || 7000);
-serveHTTP(builder.getInterface(), { port: PORT });
-
-console.log("Zamunda Stremio addon running at:");
-console.log(`- Addon: http://127.0.0.1:${PORT}/manifest.json`);
+module.exports = builder.getInterface()

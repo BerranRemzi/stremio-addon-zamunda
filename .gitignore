@@ -3,3 +3,4 @@ node_modules/
 torrent-cache
 *.torrent
 .DS_Store
+.vercel
