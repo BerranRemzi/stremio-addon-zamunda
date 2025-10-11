@@ -158,13 +158,5 @@ const generateMetaPreview = function(value, key) {
     }
 }
 
-builder.defineCatalogHandler(function(args, cb) {
-    // filter the dataset object and only take the requested type
-    const metas = Object.entries(dataset)
-	.filter(([_, value]) => value.type === args.type)
-	.map(([key, value]) => generateMetaPreview(value, key))
-
-    return Promise.resolve({ metas: metas })
-})
 
 module.exports = builder.getInterface()
