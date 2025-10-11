@@ -1,14 +1,11 @@
 {
     "version": 2,
-    "builds": [
-        { "src": "serverless.js", "use": "@now/node" }
-    ],
-	"routes": [
-        { "src": "/.*", "dest": "/serverless.js" }
-	],
     "functions": {
         "serverless.js": {
             "runtime": "nodejs18.x"
         }
-    }
+    },
+    "routes": [
+        { "src": "/.*", "dest": "/serverless.js" }
+    ]
 }
