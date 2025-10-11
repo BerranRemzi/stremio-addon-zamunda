@@ -1,5 +1,5 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
+const { parse } = require('node-html-parser');
 const tough = require('tough-cookie');
 const { wrapper } = require('axios-cookiejar-support');
 const { TextDecoder } = require('util');
@@ -123,33 +123,46 @@ class ZamundaAPI {
 			// Decode the response with Windows-1251 (Cyrillic) encoding
 			const decoder = new TextDecoder('windows-1251');
 			const html = decoder.decode(response.data);
-			const $ = cheerio.load(html, { decodeEntities: false });
+			
+			// Parse HTML with error handling
+			let root;
+			try {
+				root = parse(html);
+			} catch (parseError) {
+				console.error('HTML parsing failed, using regex fallback:', parseError.message);
+				// Fallback to regex parsing if HTML parser fails
+				return this.parseWithRegex(html, query);
+			}
 			const movies = [];
 
 			// First collect movie titles and IDs
-			$('td.colheadd').each((i, elem) => {
-				const link = $(elem).find('a[href*="/banan?id="]');
-				const title = link.text().trim();
-				const href = link.attr('href');
-				
-				if (title && href) {
-					const match = href.match(/id=(\d+)/);
-					const movieId = match ? match[1] : null;
+			const titleCells = root.querySelectorAll('td.colheadd');
+			titleCells.forEach((elem) => {
+				const link = elem.querySelector('a[href*="/banan?id="]');
+				if (link) {
+					const title = link.text.trim();
+					const href = link.getAttribute('href');
 					
-					if (movieId) {
-						movies.push({
-							id: movieId,
-							title: title,
-							torrentUrl: null
-						});
+					if (title && href) {
+						const match = href.match(/id=(\d+)/);
+						const movieId = match ? match[1] : null;
+						
+						if (movieId) {
+							movies.push({
+								id: movieId,
+								title: title,
+								torrentUrl: null
+							});
+						}
 					}
 				}
 			});
 
 			// Then find and add torrent links
-			$('a[href*="/download.php/"], a[href*=".torrent"]').each((i, elem) => {
+			const torrentLinks = root.querySelectorAll('a[href*="/download.php/"], a[href*=".torrent"]');
+			torrentLinks.forEach((elem, i) => {
 				if (i < movies.length) {
-					const torrentLink = $(elem).attr('href');
+					const torrentLink = elem.getAttribute('href');
 					if (torrentLink) {
 						movies[i].torrentUrl = torrentLink.startsWith('http') ? 
 							torrentLink : `${this.config.baseUrl}${torrentLink}`;
@@ -158,11 +171,15 @@ class ZamundaAPI {
 			});
 
 			// Find and add seeders count
-			$('td.tddownloaded center font a').each((i, elem) => {
+			const seederCells = root.querySelectorAll('td.tddownloaded center font a');
+			seederCells.forEach((elem, i) => {
 				if (i < movies.length) {
-					const seeders = $(elem).find('b').text();
-					if (seeders) {
-						movies[i].seeders = parseInt(seeders, 10) || 0;
+					const seedersElement = elem.querySelector('b');
+					if (seedersElement) {
+						const seeders = seedersElement.text.trim();
+						if (seeders) {
+							movies[i].seeders = parseInt(seeders, 10) || 0;
+						}
 					}
 				}
 			});
@@ -187,21 +204,21 @@ class ZamundaAPI {
 				}
 			});
 
-			const $ = cheerio.load(response.data);
+			const root = parse(response.data);
 			
 			// Look for any anchor tag with href containing download.php and .torrent
-			const links = $('a').filter((i, el) => {
-				const href = $(el).attr('href');
-				return href && 
-					   (href.includes('download.php') || 
-						href.includes('.torrent') ||
-						href.match(/\/download\.php\/\d+\//));
-			});
-
+			const links = root.querySelectorAll('a');
 			let torrentLink = null;
 			
-			if (links.length > 0) {
-				torrentLink = links.first().attr('href');
+			for (const link of links) {
+				const href = link.getAttribute('href');
+				if (href && 
+					(href.includes('download.php') || 
+					 href.includes('.torrent') ||
+					 href.match(/\/download\.php\/\d+\//))) {
+					torrentLink = href;
+					break;
+				}
 			}
 			
 			if (torrentLink) {
@@ -217,6 +234,44 @@ class ZamundaAPI {
 		} catch (error) {
 			console.error('Error getting torrent URL:', error.message);
 			return null;
+		}
+	}
+
+	// Fallback regex parsing method
+	parseWithRegex(html, query) {
+		const movies = [];
+		try {
+			// Simple regex patterns to extract movie data
+			const titleRegex = /<a[^>]*href="[^"]*\/banan\?id=(\d+)"[^>]*>([^<]+)<\/a>/gi;
+			const torrentRegex = /<a[^>]*href="([^"]*(?:download\.php|\.torrent)[^"]*)"[^>]*>/gi;
+			
+			let match;
+			while ((match = titleRegex.exec(html)) !== null) {
+				movies.push({
+					id: match[1],
+					title: match[2].trim(),
+					torrentUrl: null,
+					seeders: 0
+				});
+			}
+			
+			// Try to match torrent links with movies
+			let torrentMatch;
+			let movieIndex = 0;
+			while ((torrentMatch = torrentRegex.exec(html)) !== null && movieIndex < movies.length) {
+				const torrentUrl = torrentMatch[1];
+				if (torrentUrl) {
+					movies[movieIndex].torrentUrl = torrentUrl.startsWith('http') ? 
+						torrentUrl : `${this.config.baseUrl}${torrentUrl}`;
+					movieIndex++;
+				}
+			}
+			
+			console.log(`Regex fallback found ${movies.length} movies`);
+			return movies;
+		} catch (error) {
+			console.error('Regex parsing also failed:', error.message);
+			return [];
 		}
 	}
 
