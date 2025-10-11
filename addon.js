@@ -12,31 +12,18 @@ const zamunda = new ZamundaAPI({
 });
 
 const manifest = {
-    "id": "org.stremio.helloworld",
+    "id": "org.stremio.zamunda",
     "version": "1.0.0",
 
-    "name": "Hello World Addon",
-    "description": "Sample addon providing a few public domain movies",
+    "name": "Zamunda Addon",
+    "description": "Sample addon providing streams of zamunda.net torrents",
 
     // set what type of resources we will return
     "resources": [
-        "catalog",
         "stream"
     ],
 
     "types": ["movie", "series"], // your add-on will be preferred for those content types
-
-    // set catalogs, we'll be making 2 catalogs in this case, 1 for movies and 1 for series
-    "catalogs": [
-        {
-            type: 'movie',
-            id: 'helloworldmovies'
-        },
-        {
-            type: 'series',
-            id: 'helloworldseries'
-        }
-    ],
 
     // prefix of item IDs (ie: "tt0032138")
     "idPrefixes": [ "tt" ]
