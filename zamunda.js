@@ -1,7 +1,6 @@
 const axios = require('axios');
 const { parse } = require('node-html-parser');
 const tough = require('tough-cookie');
-const { wrapper } = require('axios-cookiejar-support');
 const { TextDecoder } = require('util');
 const TorrentFileManager = require('./torrentFileManager');
 const parseTorrent = require('parse-torrent');
@@ -15,12 +14,35 @@ class ZamundaAPI {
 			baseUrl: 'https://zamunda.net'
 		};
 		
-		// Create axios instance with cookie support
+		// Initialize async components
 		this.cookieJar = new tough.CookieJar();
-		this.client = wrapper(axios.create({ jar: this.cookieJar }));
+		this.client = null; // Will be initialized in init()
 		this.isLoggedIn = false;
 		this.loginPromise = null;
 		this.torrentManager = new TorrentFileManager();
+		this.initialized = false;
+	}
+
+	// Initialize the axios client with cookie support using dynamic import
+	async init() {
+		if (this.initialized) return;
+		
+		try {
+			const { wrapper } = await import('axios-cookiejar-support');
+			this.client = wrapper(axios.create({ jar: this.cookieJar }));
+			this.initialized = true;
+			console.log('ZamundaAPI initialized successfully');
+		} catch (error) {
+			console.error('Failed to initialize ZamundaAPI:', error);
+			throw error;
+		}
+	}
+
+	// Helper method to ensure API is initialized
+	async ensureInitialized() {
+		if (!this.initialized) {
+			await this.init();
+		}
 	}
 
 	// Login method
@@ -36,6 +58,7 @@ class ZamundaAPI {
 
 		this.loginPromise = (async () => {
 			try {
+				await this.ensureInitialized();
 				console.log('Attempting to login to Zamunda...');
 
 				// First, get the login page to get any CSRF tokens if needed
@@ -96,6 +119,7 @@ class ZamundaAPI {
 // Login function
 	// Helper method to ensure we're logged in before making requests
 	async ensureLoggedIn() {
+		await this.ensureInitialized();
 		if (!this.isLoggedIn) {
 			await this.login();
 		}
@@ -306,6 +330,8 @@ class ZamundaAPI {
 	// Download and cache a torrent file
 	async downloadTorrentFile(torrentUrl) {
 		try {
+			await this.ensureInitialized();
+			
 			// Check if we already have this torrent file in cache
 			const cachedBuffer = await this.torrentManager.getLocalPath(torrentUrl);
 			if (cachedBuffer) {

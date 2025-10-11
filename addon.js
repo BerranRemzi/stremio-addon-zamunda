@@ -132,6 +132,9 @@ let title = "Unknown Title";
             title = `${data.Title} ${data.Year}`;
         }
         
+        // Ensure ZamundaAPI is initialized before use
+        await zamunda.ensureInitialized();
+        
         // Search for torrents on Zamunda
         const torrents = await zamunda.searchByTitle(title);
         if (torrents.length > 0) {
