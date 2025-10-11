@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "serverless.js": {
+      "runtime": "@vercel/node@3.0.7"
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/serverless.js"
+    }
+  ]
+}
