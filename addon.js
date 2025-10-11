@@ -25,6 +25,8 @@ const manifest = {
 
     "types": ["movie", "series"], // your add-on will be preferred for those content types
 
+    "catalogs": [],
+
     // prefix of item IDs (ie: "tt0032138")
     "idPrefixes": [ "tt" ]
 
