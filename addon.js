@@ -1,6 +1,7 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const magnet = require("magnet-uri");
 const ZamundaAPI = require('./zamunda');
+require('dotenv').config();
 
 // Use environment variables
 const OMDB_API_KEY = process.env.OMDB_API_KEY;
