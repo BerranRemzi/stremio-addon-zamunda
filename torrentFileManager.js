@@ -1,10 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 
 class TorrentFileManager {
     constructor() {
-        this.cacheDir = path.join(__dirname, 'torrent-cache');
+        // Use /tmp directory for Vercel serverless functions
+        this.cacheDir = path.join(os.tmpdir(), 'torrent-cache');
         this.ensure();
     }
 
@@ -13,6 +15,8 @@ class TorrentFileManager {
             await fs.mkdir(this.cacheDir, { recursive: true });
         } catch (error) {
             console.error('Error creating cache directory:', error);
+            // Fallback: disable caching if we can't create directory
+            this.cacheDir = null;
         }
     }
 
@@ -24,6 +28,8 @@ class TorrentFileManager {
 
     // Get the local path for a torrent file
     async getLocalPath(torrentUrl) {
+        if (!this.cacheDir) return null;
+        
         const filename = this._getFilename(torrentUrl);
         const filePath = path.join(this.cacheDir, filename);
         
@@ -37,6 +43,10 @@ class TorrentFileManager {
 
     // Save a torrent file to cache
     async saveTorrentFile(torrentUrl, torrentBuffer) {
+        if (!this.cacheDir) {
+            throw new Error('Cache directory not available');
+        }
+        
         const filename = this._getFilename(torrentUrl);
         const filePath = path.join(this.cacheDir, filename);
         

@@ -40,6 +40,7 @@ class ZamundaAPI {
 
 				// First, get the login page to get any CSRF tokens if needed
 				await this.client.get(`${this.config.baseUrl}/takelogin.php`, {
+					timeout: 10000, // 10 second timeout
 					headers: {
 						'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 					}
@@ -54,6 +55,7 @@ class ZamundaAPI {
 						returnto: '/'
 					}),
 					{
+						timeout: 15000, // 15 second timeout for login
 						headers: {
 							'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 							'Content-Type': 'application/x-www-form-urlencoded',
@@ -110,6 +112,7 @@ class ZamundaAPI {
 			console.log('Searching:', query);
 
 			const response = await this.client.get(searchUrl, {
+				timeout: 15000, // 15 second timeout
 				headers: {
 					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 					'Accept-Charset': 'UTF-8'
@@ -178,6 +181,7 @@ class ZamundaAPI {
 			await this.ensureLoggedIn();
 
 			const response = await this.client.get(detailsUrl, {
+				timeout: 10000, // 10 second timeout
 				headers: {
 					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 				}
@@ -253,9 +257,10 @@ class ZamundaAPI {
 				return localPath;
 			}
 
-			// Download the torrent file
+			// Download the torrent file with timeout
 			const response = await this.client.get(torrentUrl, {
 				responseType: 'arraybuffer',
+				timeout: 10000, // 10 second timeout
 				headers: {
 					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 				}
@@ -265,7 +270,8 @@ class ZamundaAPI {
 			return await this.torrentManager.saveTorrentFile(torrentUrl, response.data);
 		} catch (error) {
 			console.error('Error downloading torrent file:', error);
-			throw error;
+			// Return null instead of throwing to allow graceful degradation
+			return null;
 		}
 	}
 
@@ -290,22 +296,36 @@ class ZamundaAPI {
 				const resMatch = (torrent.url || '').match(/\b(480p|720p|1080p|2160p|4K)\b/i);
 				const resolution = resMatch ? resMatch[1] : 'Unknown';
 
-				// Ensure we have local torrent file path
+				// Try to get local torrent file path, but don't fail if we can't
 				let localPath = await this.torrentManager.getLocalPath(torrent.url);
 				if (!localPath) {
 					localPath = await this.downloadTorrentFile(torrent.url);
 				}
 
-				// Parse torrent file
-				const torrentData = await fs.readFile(localPath);
-				const parsedTorrent = parseTorrent(torrentData);
-				const sizeGb = parsedTorrent.length ? `${(parsedTorrent.length / (1024*1024*1024)).toFixed(2)} GB` : 'Unknown';
+				// If we have a local file, try to parse it
+				if (localPath) {
+					try {
+						const torrentData = await fs.readFile(localPath);
+						const parsedTorrent = parseTorrent(torrentData);
+						const sizeGb = parsedTorrent.length ? `${(parsedTorrent.length / (1024*1024*1024)).toFixed(2)} GB` : 'Unknown';
 
+						return {
+							name: `zamunda\n${resolution}`,
+							title: `${torrent.title}👤${torrent.seeders || 'Unknown'} 💾 ${sizeGb}`,
+							infoHash: parsedTorrent.infoHash,
+							type: 'stream'
+						};
+					} catch (parseError) {
+						console.error(`Error parsing torrent file: ${parseError.message}`);
+					}
+				}
+
+				// Fallback: return basic stream info without parsing
 				return {
 					name: `zamunda\n${resolution}`,
-					title: `${torrent.title}👤${torrent.seeders || 'Unknown'} 💾 ${sizeGb}`,
-					infoHash: parsedTorrent.infoHash,
-					type: 'stream'
+					title: `${torrent.title}👤${torrent.seeders || 'Unknown'}`,
+					url: torrent.url,
+					type: 'movie'
 				};
 			} catch (error) {
 				console.error(`Error processing torrent: ${error.message}`);

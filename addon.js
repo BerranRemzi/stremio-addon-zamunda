@@ -55,9 +55,25 @@ builder.defineStreamHandler(async (args) => {
         // Get movie title from OMDB (with cache)
         let data = getCachedOmdb(imdbId);
         if (!data) {
-            const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_API_KEY}`);
-            data = await res.json();
-            if (data && data.Response !== 'False') setCachedOmdb(imdbId, data);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            try {
+                const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_API_KEY}`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                data = await res.json();
+                if (data && data.Response !== 'False') setCachedOmdb(imdbId, data);
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    console.error('OMDB API request timed out');
+                } else {
+                    console.error('OMDB API request failed:', error.message);
+                }
+                data = null;
+            }
         }
         if (data && data.Title) {
             title = `${data.Title} ${data.Year}`;
