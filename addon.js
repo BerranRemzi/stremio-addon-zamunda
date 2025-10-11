@@ -1,7 +1,17 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const magnet = require("magnet-uri");
+const ZamundaAPI = require('./zamunda');
 
-const manifest = { 
+// Use environment variables
+const OMDB_API_KEY = process.env.OMDB_API_KEY;
+
+// Initialize Zamunda API with credentials
+const zamunda = new ZamundaAPI({
+    username: process.env.ZAMUNDA_USERNAME,
+    password: process.env.ZAMUNDA_PASSWORD
+});
+
+const manifest = {
     "id": "org.stremio.helloworld",
     "version": "1.0.0",
 
@@ -67,15 +77,78 @@ function fromMagnet(name, type, uri) {
     }
 }
 
+// Simple in-memory OMDB cache to reduce duplicate requests during browsing
+const omdbCache = new Map();
+const OMDB_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+function getCachedOmdb(id) {
+    const entry = omdbCache.get(id);
+    if (!entry) return null;
+    if (Date.now() - entry.t > OMDB_TTL_MS) {
+        omdbCache.delete(id);
+        return null;
+    }
+    return entry.v;
+}
+
+function setCachedOmdb(id, value) {
+    omdbCache.set(id, { v: value, t: Date.now() });
+}
+
 const builder = new addonBuilder(manifest);
 
 // Streams handler
-builder.defineStreamHandler(function(args) {
-    if (dataset[args.id]) {
-        return Promise.resolve({ streams: [dataset[args.id]] });
-    } else {
-        return Promise.resolve({ streams: [] });
+builder.defineStreamHandler(async function(args) {
+let title = "Unknown Title";
+
+    // args.id is usually "ttXXXXXXX:Movie Name"
+    const imdbId = args.id.split(":")[0];
+
+    try {
+        // Get movie title from OMDB (with cache)
+        let data = getCachedOmdb(imdbId);
+        if (!data) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            try {
+                const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_API_KEY}`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                data = await res.json();
+                if (data && data.Response !== 'False') setCachedOmdb(imdbId, data);
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    console.error('OMDB API request timed out');
+                } else {
+                    console.error('OMDB API request failed:', error.message);
+                }
+                data = null;
+            }
+        }
+        if (data && data.Title) {
+            title = `${data.Title} ${data.Year}`;
+        }
+        
+        // Search for torrents on Zamunda
+        const torrents = await zamunda.searchByTitle(title);
+        if (torrents.length > 0) {
+            console.log(`Found ${torrents.length} torrents for ${title} (${imdbId})`);
+            
+            // Format streams with local torrent files
+            const streams = await zamunda.formatTorrentsAsStreams(torrents);
+            return { streams };
+        } else {
+            console.log(`No torrents found for ${title} (${imdbId})`);
+            return { streams: [] };
+        }
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        return { streams: [] };
     }
+    return Promise.resolve({ streams: [] });
 })
 
 const METAHUB_URL = "https://images.metahub.space"
