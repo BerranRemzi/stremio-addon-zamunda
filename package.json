@@ -1,7 +1,7 @@
 {
-  "name": "addon-helloworld",
-  "version": "2.1.0",
-  "description": "Hello World add-on for stremio",
+  "name": "stremio-zamunda-addon",
+  "version": "1.0.0",
+  "description": "Stremio addon for streaming torrents from Zamunda.net",
   "main": "server.js",
   "scripts": {
     "test": "node test/*",
@@ -14,7 +14,9 @@
   "keywords": [
     "stremio",
     "stremio-addons",
-    "addons"
+    "zamunda",
+    "torrent",
+    "streaming"
   ],
   "author": "Smart Code OOD",
   "license": "MIT",
@@ -26,7 +28,6 @@
     "axios": "^1.12.2",
     "axios-cookiejar-support": "^6.0.4",
     "dotenv": "^17.2.3",
-    "magnet-uri": "^5.4.0",
     "node-html-parser": "^7.0.1",
     "parse-torrent": "^9.1.5",
     "stremio-addon-sdk": "^1.6.10",

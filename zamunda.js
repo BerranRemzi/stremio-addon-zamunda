@@ -216,50 +216,6 @@ class ZamundaAPI {
 		}
 	}
 
-	// Get torrent URL from details page
-	async getTorrentUrl(detailsUrl) {
-		try {
-			await this.ensureLoggedIn();
-
-			const response = await this.client.get(detailsUrl, {
-				timeout: 10000, // 10 second timeout
-				headers: {
-					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-				}
-			});
-
-			const root = parse(response.data);
-			
-			// Look for any anchor tag with href containing download.php and .torrent
-			const links = root.querySelectorAll('a');
-			let torrentLink = null;
-			
-			for (const link of links) {
-				const href = link.getAttribute('href');
-				if (href && 
-					(href.includes('download.php') || 
-					 href.includes('.torrent') ||
-					 href.match(/\/download\.php\/\d+\//))) {
-					torrentLink = href;
-					break;
-				}
-			}
-			
-			if (torrentLink) {
-				// Clean up the URL (remove any style attributes that might be in the href)
-				torrentLink = torrentLink.split("'")[0];
-				const fullUrl = torrentLink.startsWith('http') ? torrentLink : `${this.config.baseUrl}${torrentLink}`;
-				console.log('Found torrent URL:', fullUrl);
-				return fullUrl;
-			}
-			
-			console.log('No torrent link found on page');
-			return null;
-		} catch (error) {
-			console.error('Error getting torrent URL:', error.message);
-			return null;
-		}
-	}
 
 	// Fallback regex parsing method
 	parseWithRegex(html, query) {
