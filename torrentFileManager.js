@@ -47,7 +47,6 @@ class TorrentFileManager {
                 url: torrentUrl
             });
             
-            console.log(`Cached torrent file for ${torrentUrl} (${torrentBuffer.length} bytes)`);
             return torrentBuffer; // Return buffer instead of file path
         } catch (error) {
             console.error('Error saving torrent file to cache:', error);
@@ -58,7 +57,6 @@ class TorrentFileManager {
     // Get cached torrent buffer for a torrent URL (alias for compatibility)
     async getLocalFileUrl(torrentUrl) {
         const buffer = await this.getLocalPath(torrentUrl);
-        console.log('Cached torrent buffer for URL:', buffer ? `${buffer.length} bytes` : 'not found');
         return buffer;
     }
 
@@ -90,8 +88,6 @@ class TorrentFileManager {
             this.cache.delete(entries[i][0]);
             this.cacheStats.evictions++;
         }
-        
-        console.log(`Evicted ${toRemove} cache entries. Cache size: ${this.cache.size}`);
     }
 
     // Get cache statistics

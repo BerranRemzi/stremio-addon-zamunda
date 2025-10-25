@@ -13,7 +13,7 @@ const zamunda = new ZamundaAPI({
 
 const manifest = {
     "id": "org.stremio.zamunda",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "name": "Zamunda Addon",
     "description": "Stream torrents from Zamunda.net",
     "resources": ["stream"],
@@ -71,21 +71,16 @@ builder.defineStreamHandler(async function(args) {
             }
         }
         
-        if (data && data.Title) {
-            title = `${data.Title} ${data.Year}`;
-        }
-        
         // Ensure ZamundaAPI is initialized before use
         await zamunda.ensureInitialized();
         
         // Search for torrents on Zamunda
-        const torrents = await zamunda.searchByTitle(title);
+        const torrents = await zamunda.searchByTitle(data.Title, data.Year);
         if (torrents.length > 0) {
-            console.log(`Found ${torrents.length} torrents for ${title} (${imdbId})`);
             const streams = await zamunda.formatTorrentsAsStreams(torrents);
             return { streams };
         } else {
-            console.log(`No torrents found for ${title} (${imdbId})`);
+            console.log(`No torrents found for ${data.Title} (${imdbId})`);
             return { streams: [] };
         }
     } catch (error) {
