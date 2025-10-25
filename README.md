@@ -1,104 +1,222 @@
 # Stremio Zamunda Addon
 
-Stream movies from Zamunda.net in Stremio. This addon enables searching and streaming content from Zamunda's torrent tracker directly in your Stremio client.
+A Stremio addon that enables streaming torrents from Zamunda.net directly in your Stremio client. This addon provides seamless integration with Zamunda's torrent tracker, allowing you to search and stream movies with Bulgarian audio/subtitles support.
 
-## Features
+## ✨ Features
 
-- Search movies on Zamunda.net
-- Stream content directly in Stremio
-- Resolution detection (720p, 1080p, 2160p, 4K)
-- Displays seeders count and file size
-- Local torrent file caching
-- Automatic login session management
+- **Movie Streaming**: Stream movies directly from Zamunda.net torrents
+- **Smart Search**: Intelligent movie title matching with year filtering
+- **Resolution Detection**: Automatic detection of video quality (480p, 576p, 720p, 1080p, 1440p, 4K/2160p, 8K, 3D variants)
+- **Bulgarian Content**: Special support for Bulgarian audio and subtitles (🇧🇬)
+- **Torrent Metadata**: Displays seeders count, file size, and quality information
+- **In-Memory Caching**: Fast torrent file caching for improved performance
+- **Session Management**: Automatic login and session handling
+- **OMDb Integration**: Optional OMDb API integration for better title resolution
+- **Serverless Support**: Deployable on Vercel/Now platform
+- **Error Resilience**: Robust error handling with fallback mechanisms
 
-## Requirements
+## 📋 Requirements
 
-- Node.js 20+
-- A Zamunda.net account (username/password)
-- Optional: OMDb API key for better title resolution
+- **Node.js**: Version 20 or higher
+- **Zamunda Account**: Valid username and password for Zamunda.net
+- **OMDb API Key**: Optional, for enhanced movie title resolution
 
-## Installation and Running
+## 🚀 Installation & Setup
 
-1) Clone the repository
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/BerranRemzi/stremio-addon-zamunda.git
 cd stremio-addon-zamunda
 ```
 
-2) Install dependencies
+### 2. Install Dependencies
 ```bash
 npm install
 ```
 
-3) Create a .env file with your settings
+### 3. Environment Configuration
+Create a `.env` file in the project root with your configuration:
+
 ```ini
-# HTTP port to serve the addon (defaults to 7000 if omitted)
+# Server Configuration
 PORT=7000
 
-# Zamunda credentials (required)
+# Zamunda Credentials (Required)
 ZAMUNDA_USERNAME=your_username
 ZAMUNDA_PASSWORD=your_password
 
-# OMDb API key (optional, improves title detection)
-OMDB_API_KEY=your_omdb_key
+# OMDb API Key (Optional - improves title detection)
+OMDB_API_KEY=your_omdb_api_key
 ```
 
-4) Run the addon
+### 4. Run the Addon
+
+#### Local Development
 ```bash
+npm start
+# or
 node server.js
 ```
 
-If successful, you should see something like:
+#### Serverless Deployment (Vercel)
+The addon automatically deploys to Vercel when changes are committed to the repository. No manual deployment is required.
+
+## 📱 Adding to Stremio
+
+### Same Computer Setup
+1. Open Stremio → **Add-ons** → **Community Add-ons** → **Install via URL**
+2. Enter: `http://127.0.0.1:7000/manifest.json`
+
+### Remote Device Setup (TV/Phone/Tablet)
+1. **Find your computer's IP address:**
+   - Windows: `Win+R` → `cmd` → `ipconfig`
+   - Look for `IPv4 Address` (e.g., `192.168.1.23`)
+
+2. **Construct the addon URL:**
+   ```
+   http://<YOUR_IP>:7000/manifest.json
+   ```
+   Example: `http://192.168.1.23:7000/manifest.json`
+
+3. **Add to Stremio:**
+   - Open Stremio on your device
+   - Go to **Add-ons** → **Community Add-ons** → **Install via URL**
+   - Paste the URL from step 2
+
+## 🔧 Configuration Options
+
+### Environment Variables
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `PORT` | No | HTTP server port | `7000` |
+| `ZAMUNDA_USERNAME` | Yes | Zamunda.net username | - |
+| `ZAMUNDA_PASSWORD` | Yes | Zamunda.net password | - |
+| `OMDB_API_KEY` | No | OMDb API key for title resolution | - |
+
+### Addon Manifest
+The addon is configured with the following specifications:
+- **ID**: `org.stremio.zamunda`
+- **Version**: `1.1.0`
+- **Types**: Movies only
+- **Resources**: Streams
+- **ID Prefixes**: IMDb IDs (`tt`)
+
+## 🏗️ Architecture
+
+### Core Components
+
+- **`server.js`**: Main HTTP server using Stremio Addon SDK
+- **`addon.js`**: Addon interface definition and stream handler
+- **`zamunda.js`**: Core Zamunda API integration and authentication
+- **`zamunda-movie-parser.js`**: HTML parsing and torrent processing
+- **`torrentFileManager.js`**: In-memory torrent file caching
+- **`serverless.js`**: Vercel serverless function handler
+
+### Data Flow
+1. Stremio requests movie streams via IMDb ID
+2. Addon fetches movie metadata from OMDb API (cached)
+3. Zamunda API searches for matching torrents
+4. Torrent files are downloaded and cached
+5. Streams are formatted and returned to Stremio
+
+## 🛠️ Development
+
+### Project Structure
 ```
-Zamunda Stremio addon running at:
-- Addon: http://127.0.0.1:7000/manifest.json
+stremio-addon-zamunda/
+├── addon.js                 # Addon interface and stream handler
+├── server.js               # Local development server
+├── serverless.js           # Vercel serverless function
+├── zamunda.js              # Zamunda API integration
+├── zamunda-movie-parser.js # HTML parsing and torrent processing
+├── torrentFileManager.js   # Torrent file caching
+├── package.json            # Dependencies and scripts
+├── now.json               # Vercel deployment configuration
+└── README.md              # This file
 ```
 
-Keep this process running while you use the addon in Stremio.
+### Key Dependencies
+- **stremio-addon-sdk**: Stremio addon framework
+- **axios**: HTTP client with cookie support
+- **node-html-parser**: HTML parsing for Zamunda pages
+- **parse-torrent**: Torrent file metadata extraction
+- **dotenv**: Environment variable management
 
-## Add the Addon to Stremio
+### Testing
+```bash
+npm test
+```
 
-You can add the addon on the same computer or from another device (e.g., a TV) on the same Wi‑Fi/LAN.
+## 🔍 Troubleshooting
 
-- On the same computer:
-  1. Open Stremio → Add-ons → Community Add-ons → Install via URL.
-  2. Paste: `http://127.0.0.1:7000/manifest.json` (or your chosen port).
+### Common Issues
 
-- From another device (TV/phone/tablet) on the same network:
-  1. Find your laptop IP address on Windows:
-     - Press Win+R → type `cmd` → Enter.
-     - Run `ipconfig` and look for the active adapter `IPv4 Address`, e.g. `192.168.1.23`.
-  2. Construct the addon URL using your laptop IP and port:
-     - `http://<YOUR_LAPTOP_IP>:7000/manifest.json` (example: `http://192.168.1.23:7000/manifest.json`)
-  3. On the TV’s Stremio app → Add-ons → Community Add-ons → Install via URL → paste the URL from step 2.
+#### No Streams Appear
+- ✅ Verify Zamunda credentials in `.env` file
+- ✅ Check addon server is running without errors
+- ✅ Ensure OMDb API key is valid (if used)
+- ✅ Try searching for a popular movie first
 
-Notes:
-- Ensure your laptop firewall allows inbound connections to the selected port (7000 by default).
-- Both devices must be on the same local network.
-- If you changed `PORT` in `.env`, use that port in the URL.
+#### Connection Issues from Remote Devices
+- ✅ Confirm computer IP address is correct
+- ✅ Check Windows Firewall allows Node.js on chosen port
+- ✅ Verify both devices are on the same network
+- ✅ Test URL format: `http://<IP>:<PORT>/manifest.json`
 
-## How It Works (high level)
+#### Port Already in Use
+- ✅ Change `PORT` in `.env` file (e.g., `7010`)
+- ✅ Restart the addon server
+- ✅ Update Stremio addon URL with new port
 
-- The addon fetches movie metadata (optionally via OMDb) to build a search title.
-- It logs into Zamunda using your credentials, searches torrents, and exposes playable streams to Stremio.
-- Torrent files may be cached locally under `torrent-cache/` for faster subsequent loads.
+#### Login Failures
+- ✅ Verify Zamunda.net credentials are correct
+- ✅ Check if Zamunda.net is accessible
+- ✅ Ensure account is not locked or suspended
 
-## Troubleshooting
+### Debug Information
+The addon provides detailed console output for debugging:
+- 🔍 Search operations
+- ✅ Successful matches
+- ❌ Failed searches
+- 📊 Cache statistics
 
-- No streams appear:
-  - Verify `ZAMUNDA_USERNAME` and `ZAMUNDA_PASSWORD` in `.env`.
-  - Check that the addon process is running with no errors.
-  - Ensure the OMDb key (if set) is valid; you can also try without it.
-- Cannot connect from TV/another device:
-  - Confirm the laptop IP is correct and reachable (ping it).
-  - Verify Windows Firewall allows Node.js on the chosen port.
-  - Double-check the URL format: `http://<IP>:<PORT>/manifest.json`.
-- Port already in use:
-  - Change `PORT` in `.env` (e.g., 7010) and restart: then use `http://<IP>:7010/manifest.json`.
+## 📊 Performance Features
 
-## Development
+### Caching System
+- **In-Memory Cache**: 50 torrent files maximum
+- **Cache Statistics**: Hit/miss rates and eviction tracking
+- **Automatic Eviction**: LRU-based cache management
+- **OMDb Caching**: 24-hour TTL for movie metadata
 
-- Main entry: `server.js`
-- Zamunda integration and torrent formatting: `zamunda.js`
+### Concurrency Control
+- **Bounded Parallelism**: Maximum 3 concurrent torrent downloads
+- **Timeout Handling**: 10-15 second timeouts for requests
+- **Error Recovery**: Graceful degradation on failures
 
-Contributions and PRs are welcome.
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for:
+- Bug fixes
+- Feature enhancements
+- Documentation improvements
+- Performance optimizations
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## ⚠️ Legal Notice
+
+This addon is for educational purposes only. Users are responsible for complying with their local laws regarding torrenting and copyright. The developers do not endorse or encourage copyright infringement.
+
+## 🔗 Links
+
+- **Repository**: [GitHub](https://github.com/BerranRemzi/stremio-addon-zamunda)
+- **Issues**: [Report Bugs](https://github.com/BerranRemzi/stremio-addon-zamunda/issues)
+- **Stremio**: [Official Website](https://www.stremio.com/)
+- **Zamunda**: [Zamunda.net](https://zamunda.net)
+
+---
+
+**Made with ❤️ for the Stremio community**

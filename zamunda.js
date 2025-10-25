@@ -1,9 +1,8 @@
 const axios = require('axios');
-const { parse } = require('node-html-parser');
 const tough = require('tough-cookie');
 const { TextDecoder } = require('util');
 const TorrentFileManager = require('./torrentFileManager');
-const parseTorrent = require('parse-torrent');
+const ZamundaMovieParser = require('./zamunda-movie-parser');
 // Removed fs dependency - using in-memory caching instead
 
 class ZamundaAPI {
@@ -20,6 +19,7 @@ class ZamundaAPI {
 		this.isLoggedIn = false;
 		this.loginPromise = null;
 		this.torrentManager = new TorrentFileManager();
+		this.movieParser = new ZamundaMovieParser(this.config.baseUrl);
 		this.initialized = false;
 	}
 
@@ -31,10 +31,8 @@ class ZamundaAPI {
 			const { wrapper } = await import('axios-cookiejar-support');
 			this.client = wrapper(axios.create({ jar: this.cookieJar }));
 			this.initialized = true;
-			console.log('ZamundaAPI initialized successfully');
 		} catch (error) {
-			console.error('Failed to initialize ZamundaAPI:', error);
-			throw error;
+			throw new Error(`Failed to initialize ZamundaAPI: ${error.message}`);
 		}
 	}
 
@@ -59,7 +57,6 @@ class ZamundaAPI {
 		this.loginPromise = (async () => {
 			try {
 				await this.ensureInitialized();
-				console.log('Attempting to login to Zamunda...');
 
 				// First, get the login page to get any CSRF tokens if needed
 				await this.client.get(`${this.config.baseUrl}/takelogin.php`, {
@@ -98,7 +95,6 @@ class ZamundaAPI {
 
 				if (hasSessionCookie) {
 					this.isLoggedIn = true;
-					console.log('✓ Successfully logged in to Zamunda');
 					return true;
 				} else {
 					console.error('✗ Login failed - no session cookie found');
@@ -133,7 +129,6 @@ class ZamundaAPI {
 
 			const searchUrl = `${this.config.baseUrl}/catalogs/movies?letter=&t=movie&search=${encodeURIComponent(query).replace(/%20/g, '+')}&field=name&comb=yes`;
 			
-			console.log('Searching:', query);
 
 			const response = await this.client.get(searchUrl, {
 				timeout: 15000, // 15 second timeout
@@ -144,72 +139,12 @@ class ZamundaAPI {
 				responseType: 'arraybuffer'
 			});
 
-			// Decode the response with Windows-1251 (Cyrillic) encoding
-			const decoder = new TextDecoder('windows-1251');
-			const html = decoder.decode(response.data);
-			
-			// Parse HTML with error handling
-			let root;
-			try {
-				root = parse(html);
-			} catch (parseError) {
-				console.error('HTML parsing failed, using regex fallback:', parseError.message);
-				// Fallback to regex parsing if HTML parser fails
-				return this.parseWithRegex(html, query);
-			}
-			const movies = [];
-
-			// First collect movie titles and IDs
-			const titleCells = root.querySelectorAll('td.colheadd');
-			titleCells.forEach((elem) => {
-				const link = elem.querySelector('a[href*="/banan?id="]');
-				if (link) {
-					const title = link.text.trim();
-					const href = link.getAttribute('href');
-					
-					if (title && href) {
-						const match = href.match(/id=(\d+)/);
-						const movieId = match ? match[1] : null;
-						
-						if (movieId) {
-							movies.push({
-								id: movieId,
-								title: title,
-								torrentUrl: null
-							});
-						}
-					}
-				}
-			});
-
-			// Then find and add torrent links
-			const torrentLinks = root.querySelectorAll('a[href*="/download.php/"], a[href*=".torrent"]');
-			torrentLinks.forEach((elem, i) => {
-				if (i < movies.length) {
-					const torrentLink = elem.getAttribute('href');
-					if (torrentLink) {
-						movies[i].torrentUrl = torrentLink.startsWith('http') ? 
-							torrentLink : `${this.config.baseUrl}${torrentLink}`;
-					}
-				}
-			});
-
-			// Find and add seeders count
-			const seederCells = root.querySelectorAll('td.tddownloaded center font a');
-			seederCells.forEach((elem, i) => {
-				if (i < movies.length) {
-					const seedersElement = elem.querySelector('b');
-					if (seedersElement) {
-						const seeders = seedersElement.text.trim();
-						if (seeders) {
-							movies[i].seeders = parseInt(seeders, 10) || 0;
-						}
-					}
-				}
-			});
-
-			//console.log(`Found ${movies.length} movies`);
-			return movies;
+				// Decode the response with Windows-1251 (Cyrillic) encoding
+				const decoder = new TextDecoder('windows-1251');
+				const html = decoder.decode(response.data);
+				
+				// Use the movie parser to extract movie data
+				return this.movieParser.parseMovies(html, query);
 		} catch (error) {
 			console.error('Error searching Zamunda:', error.message);
 			return [];
@@ -217,70 +152,107 @@ class ZamundaAPI {
 	}
 
 
-	// Fallback regex parsing method
-	parseWithRegex(html, query) {
-		const movies = [];
+
+	/**
+	 * Search for movies by title and optionally by year
+	 * @param {string} title - Movie title to search for
+	 * @param {number|string} year - Optional year to filter results (e.g., 2012 or "2012")
+	 * @returns {Array} Array of torrent objects matching the search criteria
+	 */
+	async searchByTitle(title, year = null) {
 		try {
-			// Simple regex patterns to extract movie data
-			const titleRegex = /<a[^>]*href="[^"]*\/banan\?id=(\d+)"[^>]*>([^<]+)<\/a>/gi;
-			const torrentRegex = /<a[^>]*href="([^"]*(?:download\.php|\.torrent)[^"]*)"[^>]*>/gi;
-			
-			let match;
-			while ((match = titleRegex.exec(html)) !== null) {
-				movies.push({
-					id: match[1],
-					title: match[2].trim(),
-					torrentUrl: null,
-					seeders: 0
-				});
+			if (!title || typeof title !== 'string') {
+				console.warn('Invalid title provided to searchByTitle');
+				return [];
 			}
+
+			// Print the searched movie
+			const searchDisplay = year ? `${title} (${year})` : title;
+			console.log(`🔍 Searching for: ${searchDisplay}`);
 			
-			// Try to match torrent links with movies
-			let torrentMatch;
-			let movieIndex = 0;
-			while ((torrentMatch = torrentRegex.exec(html)) !== null && movieIndex < movies.length) {
-				const torrentUrl = torrentMatch[1];
-				if (torrentUrl) {
-					movies[movieIndex].torrentUrl = torrentUrl.startsWith('http') ? 
-						torrentUrl : `${this.config.baseUrl}${torrentUrl}`;
-					movieIndex++;
-				}
+			// Normalize the search title (replace hyphens, dots, colons with spaces)
+			const normalizedTitle = this.normalizeSearchTitle(title);
+			
+			// Perform the search
+			const searchQuery = year ? `${normalizedTitle} ${year}` : normalizedTitle;
+			const results = await this.search(searchQuery);
+			
+			if (results.length === 0) {
+				console.log(`❌ No movies found for: ${searchDisplay}`);
+				return [];
 			}
+
+
+			// Filter results based on title and year matching
+			const filteredResults = this.filterMoviesByTitleAndYear(results, normalizedTitle, year);
 			
-			console.log(`Regex fallback found ${movies.length} movies`);
-			return movies;
+			if (filteredResults.length === 0) {
+				console.log(`❌ No matching movies found for: ${searchDisplay}`);
+				return [];
+			}
+
+			console.log(`✅ Found ${filteredResults.length} matching movies for: ${searchDisplay}`);
+			
+			// Convert filtered results to torrents
+			return this.movieParser.convertMoviesToTorrents(filteredResults);
 		} catch (error) {
-			console.error('Regex parsing also failed:', error.message);
+			throw new Error(`Error searching by title: ${error.message}`);
 			return [];
 		}
 	}
 
-	// Method to search by IMDB ID
-	async searchByTitle(movieTitle) {
-		try {
-			// Search using the IMDB ID
-			const results = await this.search(movieTitle);
-			
-			// Filter results that might match the IMDB ID (you might want to improve this matching)
-			const matches = results;
+	/**
+	 * Normalize search title by replacing hyphens, dots, and colons with spaces
+	 * @param {string} title - Search title to normalize
+	 * @returns {string} Normalized search title
+	 */
+	normalizeSearchTitle(title) {
+		if (!title) return '';
+		return title
+			.trim()
+			.replace(/[-\.:]/g, ' ') // Replace hyphens, dots, and colons with spaces
+			.replace(/\s+/g, ' ') // Replace multiple spaces with single space
+			.trim();
+	}
 
-			if (matches.length > 0) {
-				// Convert matches directly to torrents
-				const torrents = matches
-					.map(movie => ({
-						title: `${movie.title}\n`,
-						url: movie.torrentUrl,
-						size: 'Unknown',
-						seeders: movie.seeders,
-						leechers: 'Unknown'
-					}));
-				return torrents;
+	/**
+	 * Filter movie results based on title containment and year matching
+	 * @param {Array} movies - Array of movie objects from search results
+	 * @param {string} searchTitle - Original search title
+	 * @param {number|string|null} searchYear - Optional year to match
+	 * @returns {Array} Filtered array of movies
+	 */
+	filterMoviesByTitleAndYear(movies, searchTitle, searchYear = null) {
+		if (!movies || movies.length === 0) return [];
+
+		const searchYearNum = searchYear ? parseInt(searchYear, 10) : null;
+
+		return movies.filter(movie => {
+			// Check if the search title is contained in the movie title (case-insensitive)
+			const titleContained = movie.title.toLowerCase().includes(searchTitle.toLowerCase());
+			
+			// Check year match if year is provided
+			let yearMatch = true;
+			if (searchYearNum && !isNaN(searchYearNum)) {
+				yearMatch = this.extractYearFromTitle(movie.title) === searchYearNum;
 			}
-			return [];
-		} catch (error) {
-			console.error('Error searching by IMDB ID:', error);
-			return [];
-		}
+			
+			return titleContained && yearMatch;
+		});
+	}
+
+
+	/**
+	 * Extract year from movie title
+	 * @param {string} title - Movie title that may contain year
+	 * @returns {number|null} Extracted year or null if not found
+	 */
+	extractYearFromTitle(title) {
+		if (!title) return null;
+		
+		// Look for 4-digit year pattern (1900-2099)
+		const yearMatch = title.match(/\b(19|20)\d{2}\b/);
+		return yearMatch ? parseInt(yearMatch[0], 10) : null;
 	}
 
 	// Download and cache a torrent file
@@ -306,7 +278,7 @@ class ZamundaAPI {
 			// Save the torrent file to in-memory cache
 			return await this.torrentManager.saveTorrentFile(torrentUrl, response.data);
 		} catch (error) {
-			console.error('Error downloading torrent file:', error);
+			throw new Error(`Error downloading torrent file: ${error.message}`);
 			// Return null instead of throwing to allow graceful degradation
 			return null;
 		}
@@ -314,70 +286,18 @@ class ZamundaAPI {
 
 	// Format torrents as Stremio streams (bounded parallelism)
 	async formatTorrentsAsStreams(torrents) {
-		const limit = (concurrency) => {
-			let active = 0; const queue = [];
-			const next = () => {
-				if (active >= concurrency || queue.length === 0) return;
-				active++;
-				const { fn, resolve, reject } = queue.shift();
-				fn().then(resolve, reject).finally(() => { active--; next(); });
-			};
-			return (fn) => new Promise((resolve, reject) => { queue.push({ fn, resolve, reject }); process.nextTick(next); });
+		// Create a function to get torrent buffer for the parser
+		const getTorrentBuffer = async (torrentUrl) => {
+			// Try to get cached torrent buffer first
+			let torrentBuffer = await this.torrentManager.getLocalPath(torrentUrl);
+			if (!torrentBuffer) {
+				torrentBuffer = await this.downloadTorrentFile(torrentUrl);
+			}
+			return torrentBuffer;
 		};
 
-		const withLimit = limit(3);
-
-		const tasks = torrents.map((torrent) => withLimit(async () => {
-			try {
-				// Prefer resolution from URL (torrent name)
-				const resMatch = (torrent.url || '').match(/\b(480p|720p|1080p|2160p|4K)\b/i);
-				const resolution = resMatch ? resMatch[1] : 'Unknown';
-
-				// Try to get cached torrent buffer, but don't fail if we can't
-				let torrentBuffer = await this.torrentManager.getLocalPath(torrent.url);
-				if (!torrentBuffer) {
-					torrentBuffer = await this.downloadTorrentFile(torrent.url);
-				}
-
-				// If we have a torrent buffer, try to parse it
-				if (torrentBuffer) {
-					try {
-						const parsedTorrent = parseTorrent(torrentBuffer);
-						const sizeGb = parsedTorrent.length ? `${(parsedTorrent.length / (1024*1024*1024)).toFixed(2)} GB` : 'Unknown';
-
-						return {
-							name: `zamunda\n${resolution}`,
-							title: `${torrent.title}👤${torrent.seeders || 'Unknown'} 💾 ${sizeGb}`,
-							infoHash: parsedTorrent.infoHash,
-							type: 'stream'
-						};
-					} catch (parseError) {
-						console.error(`Error parsing torrent buffer: ${parseError.message}`);
-					}
-				}
-
-				// Fallback: return basic stream info without parsing
-				return {
-					name: `zamunda\n${resolution}`,
-					title: `${torrent.title}👤${torrent.seeders || 'Unknown'}`,
-					url: torrent.url,
-					type: 'movie'
-				};
-			} catch (error) {
-				console.error(`Error processing torrent: ${error.message}`);
-				const resMatch = (torrent.title || '').match(/\b(720p|1080p|2160p|4K)\b/i);
-				const resolution = resMatch ? resMatch[1] : 'Unknown';
-				return {
-					name: `zamunda\n${resolution}`,
-					title: torrent.title,
-					url: torrent.url,
-					type: 'movie'
-				};
-			}
-		}));
-
-		const results = await Promise.all(tasks);
-		return results;
+		// Use the movie parser to format torrents as streams
+		return await this.movieParser.formatTorrentsAsStreams(torrents, getTorrentBuffer);
 	}
 }
 
