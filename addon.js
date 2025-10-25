@@ -14,7 +14,7 @@ const zamunda = new ZamundaAPI({
 const manifest = {
     "id": "org.stremio.zamunda",
     "version": "1.1.0",
-    "name": "Zamunda Addon",
+    "name": "Zamunda",
     "description": "Stream torrents from Zamunda.net",
     "resources": ["stream"],
     "types": ["movie"],
