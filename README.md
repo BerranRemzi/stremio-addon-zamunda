@@ -63,7 +63,11 @@ The addon automatically deploys to Vercel when changes are committed to the repo
 
 ## 📱 Adding to Stremio
 
-### Same Computer Setup
+### Quick Install (Recommended)
+1. Open Stremio → **Add-ons** → **Community Add-ons** → **Install via URL**
+2. Enter: `https://stremio-addon-zamunda.vercel.app/manifest.json`
+
+### Local Development Setup
 1. Open Stremio → **Add-ons** → **Community Add-ons** → **Install via URL**
 2. Enter: `http://127.0.0.1:7000/manifest.json`
 
@@ -216,6 +220,11 @@ This addon is for educational purposes only. Users are responsible for complying
 - **Issues**: [Report Bugs](https://github.com/BerranRemzi/stremio-addon-zamunda/issues)
 - **Stremio**: [Official Website](https://www.stremio.com/)
 - **Zamunda**: [Zamunda.net](https://zamunda.net)
+- **Original Template**: [Stremio Hello World Addon](https://github.com/Stremio/addon-helloworld)
+
+## 📚 Credits
+
+This addon is based on the [Stremio Hello World Addon](https://github.com/Stremio/addon-helloworld) template.
 
 ---
 
