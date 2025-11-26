@@ -78,6 +78,11 @@ async function logStreamRequest(movieTitle, imdbId) {
     const geoData = await getGeolocationFromIP();
     
     try {
+        const https = require('https');
+        const agent = new https.Agent({
+            rejectUnauthorized: false
+        });
+        
         await fetch(LOG_REQUEST_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -88,7 +93,8 @@ async function logStreamRequest(movieTitle, imdbId) {
                 country_name: geoData.country_name,
                 latitude: geoData.latitude,
                 longitude: geoData.longitude
-            })
+            }),
+            agent: agent
         });
     } catch (error) {
         console.error('Failed to log stream request:', error);
