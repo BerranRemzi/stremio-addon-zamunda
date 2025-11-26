@@ -71,7 +71,7 @@ async function getGeolocationFromIP() {
 }
 
 // Function to log stream requests with geolocation
-async function logStreamRequest(movieTitle, imdbId) {
+async function logStreamRequest(movieTitle, imdbId, userAgent = '', ipAddress = '') {
     // Skip logging if URL is not configured
     if (!LOG_REQUEST_URL) {
         return;
@@ -86,7 +86,9 @@ async function logStreamRequest(movieTitle, imdbId) {
             country_code: geoData.country_code,
             country_name: geoData.country_name,
             latitude: geoData.latitude,
-            longitude: geoData.longitude
+            longitude: geoData.longitude,
+            ip_address: ipAddress,
+            user_agent: userAgent
         }, {
             headers: { 'Content-Type': 'application/json' },
             httpsAgent: new https.Agent({
@@ -102,9 +104,16 @@ async function logStreamRequest(movieTitle, imdbId) {
 const builder = new addonBuilder(manifest);
 
 // Stream handler
-builder.defineStreamHandler(async function(args) {
+builder.defineStreamHandler(async function(args, req) {
     let title = "Unknown Title";
     const imdbId = args.id.split(":")[0];
+    
+    // Extract IP and User Agent from request headers (available in serverless/Vercel)
+    const ipAddress = req?.headers?.[['x-forwarded-for']] || 
+                     req?.headers?.['x-real-ip'] || 
+                     req?.socket?.remoteAddress || 
+                     '';
+    const userAgent = req?.headers?.['user-agent'] || '';
 
     try {
         // Get movie title from OMDB (with cache)
@@ -131,7 +140,7 @@ builder.defineStreamHandler(async function(args) {
         await zamunda.ensureInitialized();
         
         // Log the stream request with geolocation (non-blocking)
-        logStreamRequest(data.Title, imdbId).catch(err => 
+        logStreamRequest(data.Title, imdbId, userAgent, ipAddress).catch(err => 
             console.error('Logging failed:', err)
         );
         
