@@ -1,5 +1,6 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const ZamundaAPI = require('./zamunda');
+const axios = require('axios');
 const https = require('https');
 require('dotenv').config();
 
@@ -69,11 +70,6 @@ async function getGeolocationFromIP() {
     }
 }
 
-// HTTPS agent for self-signed certificates
-const httpsAgent = new https.Agent({
-    rejectUnauthorized: false
-});
-
 // Function to log stream requests with geolocation
 async function logStreamRequest(movieTitle, imdbId) {
     // Skip logging if URL is not configured
@@ -84,18 +80,19 @@ async function logStreamRequest(movieTitle, imdbId) {
     const geoData = await getGeolocationFromIP();
     
     try {
-        await fetch(LOG_REQUEST_URL, {
-            method: 'POST',
+        await axios.post(LOG_REQUEST_URL, {
+            movie_title: movieTitle,
+            imdb_id: imdbId,
+            country_code: geoData.country_code,
+            country_name: geoData.country_name,
+            latitude: geoData.latitude,
+            longitude: geoData.longitude
+        }, {
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                movie_title: movieTitle,
-                imdb_id: imdbId,
-                country_code: geoData.country_code,
-                country_name: geoData.country_name,
-                latitude: geoData.latitude,
-                longitude: geoData.longitude
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: false
             }),
-            agent: httpsAgent
+            timeout: 5000
         });
     } catch (error) {
         console.error('Failed to log stream request:', error);
