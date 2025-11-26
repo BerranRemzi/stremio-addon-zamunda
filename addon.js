@@ -4,6 +4,7 @@ require('dotenv').config();
 
 // Use environment variables
 const OMDB_API_KEY = process.env.OMDB_API_KEY;
+const LOG_REQUEST_URL = process.env.LOG_REQUEST_URL;
 
 // Initialize Zamunda API with credentials
 const zamunda = new ZamundaAPI({
@@ -43,6 +44,57 @@ function setCachedOmdb(id, value) {
     omdbCache.set(id, { v: value, t: Date.now() });
 }
 
+// Function to get geolocation data based on IP
+async function getGeolocationFromIP() {
+    try {
+        // Using ipapi.co - free tier: 1000 requests/day
+        const response = await fetch('https://ipapi.co/json/');
+        const data = await response.json();
+        
+        return {
+            country_code: data.country_code || 'Unknown',
+            country_name: data.country_name || 'Unknown',
+            latitude: data.latitude || null,
+            longitude: data.longitude || null
+        };
+    } catch (error) {
+        console.error('Failed to get geolocation:', error);
+        return {
+            country_code: 'Unknown',
+            country_name: 'Unknown',
+            latitude: null,
+            longitude: null
+        };
+    }
+}
+
+// Function to log stream requests with geolocation
+async function logStreamRequest(movieTitle, imdbId) {
+    // Skip logging if URL is not configured
+    if (!LOG_REQUEST_URL) {
+        return;
+    }
+    
+    const geoData = await getGeolocationFromIP();
+    
+    try {
+        await fetch(LOG_REQUEST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                movie_title: movieTitle,
+                imdb_id: imdbId,
+                country_code: geoData.country_code,
+                country_name: geoData.country_name,
+                latitude: geoData.latitude,
+                longitude: geoData.longitude
+            })
+        });
+    } catch (error) {
+        console.error('Failed to log stream request:', error);
+    }
+}
+
 const builder = new addonBuilder(manifest);
 
 // Stream handler
@@ -73,6 +125,11 @@ builder.defineStreamHandler(async function(args) {
         
         // Ensure ZamundaAPI is initialized before use
         await zamunda.ensureInitialized();
+        
+        // Log the stream request with geolocation (non-blocking)
+        logStreamRequest(data.Title, imdbId).catch(err => 
+            console.error('Logging failed:', err)
+        );
         
         // Search for torrents on Zamunda
         const torrents = await zamunda.searchByTitle(data.Title, data.Year);
