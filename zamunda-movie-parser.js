@@ -360,6 +360,86 @@ class ZamundaMovieParser {
 	}
 
 	/**
+	 * Get resolution priority for sorting (higher is better)
+	 * @param {string} resolution - Resolution string
+	 * @returns {number} Priority value
+	 */
+	getResolutionPriority(resolution) {
+		if (!resolution) return 0;
+		
+		const resLower = resolution.toLowerCase();
+		
+		// Remove (3D) suffix for comparison
+		const baseRes = resLower.replace(/\(3d\)/, '').trim();
+		
+		// Priority mapping (higher number = better quality)
+		const priorityMap = {
+			'8k': 1000,
+			'4k': 900,
+			'2160p': 900,
+			'uhd': 900,
+			'1440p': 700,
+			'2k': 700,
+			'1080p': 600,
+			'fhd': 600,
+			'720p': 400,
+			'hd': 400,
+			'576p': 300,
+			'480p': 200,
+			'sd': 200,
+			'3d': 100,
+			'unknown': 0
+		};
+		
+		return priorityMap[baseRes] || 0;
+	}
+
+	/**
+	 * Sort streams by resolution (descending) and seeders (descending)
+	 * @param {Array} streams - Array of stream objects
+	 * @returns {Array} Sorted streams
+	 */
+	sortStreamsByQuality(streams) {
+		return streams.sort((a, b) => {
+			// Extract resolution from stream name (format: "zamunda\n720p")
+			const resA = (a.name || '').split('\n')[1] || 'Unknown';
+			const resB = (b.name || '').split('\n')[1] || 'Unknown';
+			
+			// Get priority values
+			const priorityA = this.getResolutionPriority(resA);
+			const priorityB = this.getResolutionPriority(resB);
+			
+			// Sort by resolution priority first (higher first)
+			if (priorityA !== priorityB) {
+				return priorityB - priorityA;
+			}
+			
+			// If same resolution, sort by seeders (extract from title)
+			const seedersA = this.extractSeedersFromTitle(a.title);
+			const seedersB = this.extractSeedersFromTitle(b.title);
+			
+			return seedersB - seedersA;
+		});
+	}
+
+	/**
+	 * Extract seeders count from stream title
+	 * @param {string} title - Stream title (e.g., "Movie Title 🇧🇬 👤12 💾 2.34 GB")
+	 * @returns {number} Seeders count
+	 */
+	extractSeedersFromTitle(title) {
+		if (!title) return 0;
+		
+		// Look for 👤 followed by number
+		const match = title.match(/👤\s*(\d+)/);
+		if (match) {
+			return parseInt(match[1], 10) || 0;
+		}
+		
+		return 0;
+	}
+
+	/**
 	 * Parse torrent buffer to extract metadata
 	 * @param {Buffer} torrentBuffer - Torrent file buffer
 	 * @returns {Object} Parsed torrent metadata
@@ -450,7 +530,13 @@ class ZamundaMovieParser {
 		}));
 
 		const results = await Promise.all(tasks);
-		return results;
+		
+		// Sort by resolution and seeders
+		const sorted = this.sortStreamsByQuality(results);
+		
+		console.log(`✅ Sorted ${sorted.length} movie streams by quality and seeders`);
+		
+		return sorted;
 	}
 }
 

@@ -13,11 +13,11 @@ const zamunda = new ZamundaAPI({
 
 const manifest = {
     "id": "org.stremio.zamunda",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "name": "Zamunda",
-    "description": "Stream torrents from Zamunda.net",
+    "description": "Stream movies and series from Zamunda.net",
     "resources": ["stream"],
-    "types": ["movie"],
+    "types": ["movie", "series"],
     "catalogs": [],
     "idPrefixes": ["tt"],
     "behaviorHints": {
@@ -49,9 +49,21 @@ const builder = new addonBuilder(manifest);
 builder.defineStreamHandler(async function(args) {
     let title = "Unknown Title";
     const imdbId = args.id.split(":")[0];
+    const type = args.type; // 'movie' or 'series'
+    
+    // For series, extract season and episode from id (format: tt1234567:1:5 for season 1 episode 5)
+    let season = null;
+    let episode = null;
+    if (type === 'series') {
+        const parts = args.id.split(":");
+        if (parts.length >= 3) {
+            season = parseInt(parts[1], 10);
+            episode = parseInt(parts[2], 10);
+        }
+    }
 
     try {
-        // Get movie title from OMDB (with cache)
+        // Get title from OMDB (with cache)
         let data = getCachedOmdb(imdbId);
         if (!data) {
             const controller = new AbortController();
@@ -71,13 +83,24 @@ builder.defineStreamHandler(async function(args) {
             }
         }
         
+        if (!data || !data.Title) {
+            console.log(`No data found for ${imdbId}`);
+            return { streams: [] };
+        }
+        
         // Ensure ZamundaAPI is initialized before use
         await zamunda.ensureInitialized();
         
-        // Search for torrents on Zamunda
-        const torrents = await zamunda.searchByTitle(data.Title, data.Year);
+        // Search for torrents on Zamunda based on type
+        let torrents;
+        if (type === 'series') {
+            torrents = await zamunda.searchSeriesByTitle(data.Title, data.Year, season, episode);
+        } else {
+            torrents = await zamunda.searchByTitle(data.Title, data.Year);
+        }
+        
         if (torrents.length > 0) {
-            const streams = await zamunda.formatTorrentsAsStreams(torrents);
+            const streams = await zamunda.formatTorrentsAsStreams(torrents, type, season, episode);
             return { streams };
         } else {
             console.log(`No torrents found for ${data.Title} (${imdbId})`);
