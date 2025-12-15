@@ -3,6 +3,7 @@ const tough = require('tough-cookie');
 const { TextDecoder } = require('util');
 const TorrentFileManager = require('./torrentFileManager');
 const ZamundaMovieParser = require('./zamunda-movie-parser');
+const ZamundaSeriesParser = require('./zamunda-series-parser');
 // Removed fs dependency - using in-memory caching instead
 
 class ZamundaAPI {
@@ -20,6 +21,7 @@ class ZamundaAPI {
 		this.loginPromise = null;
 		this.torrentManager = new TorrentFileManager();
 		this.movieParser = new ZamundaMovieParser(this.config.baseUrl);
+		this.seriesParser = new ZamundaSeriesParser(this.config.baseUrl);
 		this.initialized = false;
 	}
 
@@ -122,7 +124,7 @@ class ZamundaAPI {
 		return this.isLoggedIn;
 	}
 
-	// Search method
+	// Search method for movies
 	async search(query) {
 		try {
 			await this.ensureLoggedIn();
@@ -151,6 +153,35 @@ class ZamundaAPI {
 		}
 	}
 
+	// Search method for series
+	async searchSeries(query) {
+		try {
+			await this.ensureLoggedIn();
+
+			const searchUrl = `${this.config.baseUrl}/catalogs/series?letter=&t=series&search=${encodeURIComponent(query).replace(/%20/g, '+')}&field=name&comb=yes`;
+			
+
+			const response = await this.client.get(searchUrl, {
+				timeout: 15000, // 15 second timeout
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+					'Accept-Charset': 'UTF-8'
+				},
+				responseType: 'arraybuffer'
+			});
+
+				// Decode the response with Windows-1251 (Cyrillic) encoding
+				const decoder = new TextDecoder('windows-1251');
+				const html = decoder.decode(response.data);
+				
+				// Use the series parser to extract series data
+				return this.seriesParser.parseSeries(html, query);
+		} catch (error) {
+			console.error('Error searching Zamunda series:', error.message);
+			return [];
+		}
+	}
+
 
 
 	/**
@@ -168,7 +199,7 @@ class ZamundaAPI {
 
 			// Print the searched movie
 			const searchDisplay = year ? `${title} (${year})` : title;
-			console.log(`🔍 Searching for: ${searchDisplay}`);
+			console.log(`🔍 Searching for movie: ${searchDisplay}`);
 			
 			// Normalize the search title (replace hyphens, dots, colons with spaces)
 			const normalizedTitle = this.normalizeSearchTitle(title);
@@ -197,6 +228,69 @@ class ZamundaAPI {
 			return this.movieParser.convertMoviesToTorrents(filteredResults);
 		} catch (error) {
 			throw new Error(`Error searching by title: ${error.message}`);
+			return [];
+		}
+	}
+
+	/**
+	 * Search for series by title and optionally by year
+	 * @param {string} title - Series title to search for
+	 * @param {number|string} year - Optional year to filter results
+	 * @param {number} season - Optional season number
+	 * @param {number} episode - Optional episode number
+	 * @returns {Array} Array of torrent objects matching the search criteria
+	 */
+	async searchSeriesByTitle(title, year = null, season = null, episode = null) {
+		try {
+			if (!title || typeof title !== 'string') {
+				console.warn('Invalid title provided to searchSeriesByTitle');
+				return [];
+			}
+
+			// Print the searched series
+			let searchDisplay = year ? `${title} (${year})` : title;
+			if (season !== null) {
+				searchDisplay += ` S${String(season).padStart(2, '0')}`;
+				if (episode !== null) {
+					searchDisplay += `E${String(episode).padStart(2, '0')}`;
+				}
+			}
+			console.log(`🔍 Searching for series: ${searchDisplay}`);
+			
+			// Normalize the search title
+			const normalizedTitle = this.normalizeSearchTitle(title);
+			
+			// Build search query with season/episode if provided
+			let searchQuery = normalizedTitle;
+			if (year) {
+				searchQuery += ` ${year}`;
+			}
+			if (season !== null) {
+				searchQuery += ` S${String(season).padStart(2, '0')}`;
+			}
+			
+			// Perform the search
+			const results = await this.searchSeries(searchQuery);
+			
+			if (results.length === 0) {
+				console.log(`❌ No series found for: ${searchDisplay}`);
+				return [];
+			}
+
+			// Filter results based on title matching
+			const filteredResults = this.filterSeriesByTitle(results, normalizedTitle, season, episode);
+			
+			if (filteredResults.length === 0) {
+				console.log(`❌ No matching series found for: ${searchDisplay}`);
+				return [];
+			}
+
+			console.log(`✅ Found ${filteredResults.length} matching series for: ${searchDisplay}`);
+			
+			// Convert filtered results to torrents
+			return this.seriesParser.convertSeriesToTorrents(filteredResults);
+		} catch (error) {
+			console.error(`Error searching series by title: ${error.message}`);
 			return [];
 		}
 	}
@@ -238,6 +332,54 @@ class ZamundaAPI {
 			}
 			
 			return titleContained && yearMatch;
+		});
+	}
+
+	/**
+	 * Filter series results based on title and season/episode
+	 * @param {Array} series - Array of series objects from search results
+	 * @param {string} searchTitle - Original search title
+	 * @param {number|null} season - Optional season to match
+	 * @param {number|null} episode - Optional episode to match
+	 * @returns {Array} Filtered array of series
+	 */
+	filterSeriesByTitle(series, searchTitle, season = null, episode = null) {
+		if (!series || series.length === 0) return [];
+
+		return series.filter(s => {
+			// Check if the search title is contained in the series title (case-insensitive)
+			const titleContained = s.title.toLowerCase().includes(searchTitle.toLowerCase());
+			
+			if (!titleContained) return false;
+
+			// If season/episode filtering is not needed, include all matching titles
+			if (season === null && episode === null) {
+				return true;
+			}
+
+			// Extract season/episode info from the series title
+			const seasonEpisode = this.seriesParser.extractSeasonEpisode(s.title);
+			
+			// Match season if provided
+			if (season !== null) {
+				// Include season packs for the requested season
+				if (seasonEpisode.isPack && seasonEpisode.season === season) {
+					return true;
+				}
+				
+				// Include specific episodes
+				if (seasonEpisode.season === season) {
+					// If episode is specified, match it or include packs
+					if (episode !== null) {
+						return seasonEpisode.episode === episode || seasonEpisode.isPack;
+					}
+					return true;
+				}
+				
+				return false;
+			}
+			
+			return true;
 		});
 	}
 
@@ -285,7 +427,7 @@ class ZamundaAPI {
 	}
 
 	// Format torrents as Stremio streams (bounded parallelism)
-	async formatTorrentsAsStreams(torrents) {
+	async formatTorrentsAsStreams(torrents, type = 'movie', season = null, episode = null) {
 		// Create a function to get torrent buffer for the parser
 		const getTorrentBuffer = async (torrentUrl) => {
 			// Try to get cached torrent buffer first
@@ -296,8 +438,12 @@ class ZamundaAPI {
 			return torrentBuffer;
 		};
 
-		// Use the movie parser to format torrents as streams
-		return await this.movieParser.formatTorrentsAsStreams(torrents, getTorrentBuffer);
+		// Use the appropriate parser based on type
+		if (type === 'series') {
+			return await this.seriesParser.formatTorrentsAsStreams(torrents, getTorrentBuffer, season, episode);
+		} else {
+			return await this.movieParser.formatTorrentsAsStreams(torrents, getTorrentBuffer);
+		}
 	}
 }
 
