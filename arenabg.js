@@ -304,20 +304,83 @@ class ArenaBGAPI {
 		}
 	}
 
+	/**
+	 * Fetch torrent detail page and extract download key
+	 * @param {string} detailUrl - URL of the torrent detail page
+	 * @returns {Promise<string|null>} Download URL with key or null if failed
+	 */
+	async getDownloadUrl(detailUrl) {
+		try {
+			await this.ensureLoggedIn();
+			
+			// Fetch the detail page
+			const response = await this.client.get(detailUrl, {
+				timeout: 10000,
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+				},
+				responseType: 'arraybuffer'
+			});
+
+			const decoder = new TextDecoder('utf-8');
+			const html = decoder.decode(response.data);
+			
+			// Extract download key from the page
+			const downloadKey = this.movieParser.extractDownloadKey(html);
+			
+			if (downloadKey) {
+				return `${this.config.baseUrl}/bg/torrents/download/?key=${downloadKey}`;
+			}
+			
+			console.error(`[ArenaBG] Could not find download key in detail page: ${detailUrl}`);
+			return null;
+		} catch (error) {
+			console.error(`[ArenaBG] Error fetching detail page: ${error.message}`);
+			return null;
+		}
+	}
+
 	// Format torrents as Stremio streams (bounded parallelism)
 	async formatTorrentsAsStreams(torrents) {
-		// Create a function to get torrent buffer for the parser
-		const getTorrentBuffer = async (torrentUrl) => {
-			// Try to get cached torrent buffer first
-			let torrentBuffer = await this.torrentManager.getLocalPath(torrentUrl);
-			if (!torrentBuffer) {
-				torrentBuffer = await this.downloadTorrentFile(torrentUrl);
-			}
-			return torrentBuffer;
-		};
+		try {
+			// Create a function to get torrent buffer for the parser
+			const getTorrentBuffer = async (torrentUrl) => {
+				// Try to get cached torrent buffer first
+				let torrentBuffer = await this.torrentManager.getLocalPath(torrentUrl);
+				if (!torrentBuffer) {
+					torrentBuffer = await this.downloadTorrentFile(torrentUrl);
+				}
+				return torrentBuffer;
+			};
 
-		// Use the movie parser to format torrents as streams
-		return await this.movieParser.formatTorrentsAsStreams(torrents, getTorrentBuffer);
+			// First, fetch download URLs for all torrents that need them
+			const torrentsWithUrls = await Promise.all(torrents.map(async (torrent) => {
+				try {
+					if (!torrent.url && torrent.detailUrl) {
+						// Need to fetch the detail page to get download URL
+						const downloadUrl = await this.getDownloadUrl(torrent.detailUrl);
+						if (!downloadUrl) {
+							console.error(`[ArenaBG] Skipping torrent - no download URL: ${torrent.title}`);
+							return null; // Skip this torrent
+						}
+						return { ...torrent, url: downloadUrl };
+					}
+					return torrent;
+				} catch (error) {
+					console.error(`[ArenaBG] Error processing torrent ${torrent.title}: ${error.message}`);
+					return null;
+				}
+			}));
+			
+			// Filter out failed torrents
+			const validTorrents = torrentsWithUrls.filter(t => t !== null);
+
+			// Use the movie parser to format torrents as streams
+			return await this.movieParser.formatTorrentsAsStreams(validTorrents, getTorrentBuffer);
+		} catch (error) {
+			console.error(`[ArenaBG] Error in formatTorrentsAsStreams: ${error.message}`);
+			return [];
+		}
 	}
 }
 

@@ -82,32 +82,31 @@ class ArenaBGMovieParser {
 						}
 					}
 					
-					// Check for Bulgarian audio flag
-					const hasBulgarianAudio = filenameCell.querySelector('.fa-volume-up') !== null;
-					
-					// Check for Bulgarian subtitles flag
+					// Note: On ArenaBG website, flag-icon-bg means Bulgarian subtitles, not audio
+					// We'll detect Bulgarian audio from the title text instead
 					const hasBulgarianSubtitles = filenameCell.querySelector('.flag-icon-bg') !== null;
 					
-					// The torrent URL - construct download link from the detail page URL
+					// Store the detail page URL - we'll need to visit this to get the download key
 					// If href is absolute, extract the path; if relative, use it directly
-					let torrentPath = href;
+					let detailPath = href;
 					if (href.startsWith('http')) {
 						// Extract path from full URL
 						const urlMatch = href.match(/https?:\/\/[^\/]+(\/.*)/);
-						torrentPath = urlMatch ? urlMatch[1] : href;
+						detailPath = urlMatch ? urlMatch[1] : href;
 					}
-					// Remove trailing slash if present and append 'download'
-					torrentPath = torrentPath.replace(/\/$/, '');
-					const torrentUrl = `${this.baseUrl}${torrentPath}/download`;
+					// Remove trailing slash if present
+					detailPath = detailPath.replace(/\/$/, '');
+					const detailUrl = `${this.baseUrl}${detailPath}`;
 					
 					movies.push({
 						id: movieId,
 						title: title,
-						torrentUrl: torrentUrl,
+						detailUrl: detailUrl,  // Store detail page URL instead of direct download
+						torrentUrl: null,  // Will be populated when we fetch the detail page
 						seeders: seeders,
 						leechers: leechers,
 						size: size,
-						hasBulgarianAudio: hasBulgarianAudio,
+						hasBulgarianAudio: false,  // Will be detected from title text
 						hasBulgarianSubtitles: hasBulgarianSubtitles
 					});
 				} catch (rowError) {
@@ -116,6 +115,10 @@ class ArenaBGMovieParser {
 			});
 
 			console.log(`[ArenaBG] Parsed ${movies.length} movies from HTML`);
+			
+			// Detect Bulgarian audio/subtitles flags from title text
+			this.detectFlags(root, movies);
+			
 			return movies;
 		} catch (error) {
 			console.error('Error parsing ArenaBG movies:', error.message);
@@ -137,7 +140,9 @@ class ArenaBGMovieParser {
 				// Check for Bulgarian audio indicators
 				if (titleLower.includes('bg audio') || 
 					titleLower.includes('bgaudio') || 
+					titleLower.includes('bg+enaudio') ||
 					titleLower.includes('bulgarian audio') ||
+					titleLower.includes('българско озвучение') ||
 					titleLower.includes('дубляж')) {
 					movie.hasBulgarianAudio = true;
 					movie.flags = movie.flags || [];
@@ -291,6 +296,32 @@ class ArenaBGMovieParser {
 	}
 
 	/**
+	 * Extract download key from torrent detail page
+	 * @param {string} html - HTML content of the detail page
+	 * @returns {string|null} Download key or null if not found
+	 */
+	extractDownloadKey(html) {
+		try {
+			// Look for download link pattern: /bg/torrents/download/?key=...
+			const downloadMatch = html.match(/\/bg\/torrents\/download\/\?key=([^"'&]+)/);
+			if (downloadMatch) {
+				return downloadMatch[1];
+			}
+			
+			// Alternative pattern with different quotes
+			const altMatch = html.match(/torrents\/download\/\?key=([^"'&\s]+)/);
+			if (altMatch) {
+				return altMatch[1];
+			}
+			
+			return null;
+		} catch (error) {
+			console.error('Error extracting download key:', error.message);
+			return null;
+		}
+	}
+
+	/**
 	 * Convert movie objects to torrent format
 	 * @param {Array} movies - Array of movie objects
 	 * @returns {Array} Array of torrent objects
@@ -298,7 +329,8 @@ class ArenaBGMovieParser {
 	convertMoviesToTorrents(movies) {
 		return movies.map(movie => ({
 			title: `${movie.title}\n`,
-			url: movie.torrentUrl,
+			url: movie.torrentUrl,  // This will be populated after fetching detail pages
+			detailUrl: movie.detailUrl,  // Keep detail URL for fetching download key
 			size: movie.size || 'Unknown',
 			seeders: movie.seeders,
 			leechers: movie.leechers || 'Unknown',
@@ -407,9 +439,11 @@ class ArenaBGMovieParser {
 				if (torrentBuffer) {
 					const metadata = this.parseTorrentMetadata(torrentBuffer);
 					if (metadata) {
+						const streamTitle = `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'} 💾 ${metadata.size}`;
+						console.log(`[Stream] ${torrent.hasBulgarianAudio ? '🇧🇬' : '  '} ${torrent.title.substring(0, 50)}`);
 						return {
 							name: `arenabg\n${resolution}`,
-							title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'} 💾 ${metadata.size}`,
+							title: streamTitle,
 							infoHash: metadata.infoHash,
 							type: 'stream'
 						};

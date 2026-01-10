@@ -101,7 +101,7 @@ The addon automatically deploys to Vercel when changes are committed to the repo
 ### Addon Manifest
 The addon is configured with the following specifications:
 - **ID**: `org.stremio.zamunda`
-- **Version**: `1.1.0`
+- **Version**: `1.2.0`
 - **Types**: Movies only
 - **Resources**: Streams
 - **ID Prefixes**: IMDb IDs (`tt`)

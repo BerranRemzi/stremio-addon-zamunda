@@ -20,7 +20,7 @@ const arenabg = new ArenaBGAPI({
 
 const manifest = {
     "id": "org.stremio.zamunda",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "name": "Zamunda",
     "description": "Stream torrents from Zamunda.net",
     "resources": ["stream"],
@@ -78,6 +78,15 @@ builder.defineStreamHandler(async function(args) {
             }
         }
         
+        // Check if we have valid data
+        if (!data || !data.Title) {
+            console.log(`No OMDB data for ${imdbId}`);
+            return { streams: [] };
+        }
+        
+        title = data.Title;
+        console.log(`🔍 Searching for: ${title} (${data.Year || 'unknown year'})`);
+        
         // Ensure both APIs are initialized
         await zamunda.ensureInitialized();
         await arenabg.ensureInitialized();
@@ -99,14 +108,26 @@ builder.defineStreamHandler(async function(args) {
         
         if (allTorrents.length > 0) {
             // Format torrents from both sources
+            console.log('📦 Starting to format torrents as streams...');
             const [zamundaStreams, arenabgStreams] = await Promise.all([
-                zamundaTorrents.length > 0 ? zamunda.formatTorrentsAsStreams(zamundaTorrents).catch(() => []) : [],
-                arenabgTorrents.length > 0 ? arenabg.formatTorrentsAsStreams(arenabgTorrents).catch(() => []) : []
+                zamundaTorrents.length > 0 ? zamunda.formatTorrentsAsStreams(zamundaTorrents).catch(err => {
+                    console.error('Error formatting Zamunda streams:', err.message);
+                    return [];
+                }) : [],
+                arenabgTorrents.length > 0 ? arenabg.formatTorrentsAsStreams(arenabgTorrents).catch(err => {
+                    console.error('Error formatting ArenaBG streams:', err.message);
+                    return [];
+                }) : []
             ]);
             
+            console.log('✅ Formatting complete');
             const allStreams = [...zamundaStreams, ...arenabgStreams];
             
             console.log(`Found ${zamundaStreams.length} Zamunda + ${arenabgStreams.length} ArenaBG streams for ${data.Title} (${imdbId})`);
+            console.log(`Total streams to return: ${allStreams.length}`);
+            if (allStreams.length > 0) {
+                console.log(`First stream sample:`, JSON.stringify(allStreams[0]).substring(0, 200));
+            }
             return { streams: allStreams };
         } else {
             console.log(`No torrents found for ${data.Title} (${imdbId})`);
