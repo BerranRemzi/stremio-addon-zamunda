@@ -1,5 +1,6 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const ZamundaAPI = require('./zamunda');
+const ArenaBGAPI = require('./arenabg');
 require('dotenv').config();
 
 // Use environment variables
@@ -7,6 +8,12 @@ const OMDB_API_KEY = process.env.OMDB_API_KEY;
 
 // Initialize Zamunda API with credentials
 const zamunda = new ZamundaAPI({
+    username: process.env.ZAMUNDA_USERNAME,
+    password: process.env.ZAMUNDA_PASSWORD
+});
+
+// Initialize ArenaBG API with same credentials
+const arenabg = new ArenaBGAPI({
     username: process.env.ZAMUNDA_USERNAME,
     password: process.env.ZAMUNDA_PASSWORD
 });
@@ -71,14 +78,36 @@ builder.defineStreamHandler(async function(args) {
             }
         }
         
-        // Ensure ZamundaAPI is initialized before use
+        // Ensure both APIs are initialized
         await zamunda.ensureInitialized();
+        await arenabg.ensureInitialized();
         
-        // Search for torrents on Zamunda
-        const torrents = await zamunda.searchByTitle(data.Title, data.Year);
-        if (torrents.length > 0) {
-            const streams = await zamunda.formatTorrentsAsStreams(torrents);
-            return { streams };
+        // Search both trackers in parallel
+        const [zamundaTorrents, arenabgTorrents] = await Promise.all([
+            zamunda.searchByTitle(data.Title, data.Year).catch(err => {
+                console.error('Zamunda search error:', err.message);
+                return [];
+            }),
+            arenabg.searchByTitle(data.Title, data.Year).catch(err => {
+                console.error('ArenaBG search error:', err.message);
+                return [];
+            })
+        ]);
+        
+        // Combine results from both trackers
+        const allTorrents = [...zamundaTorrents, ...arenabgTorrents];
+        
+        if (allTorrents.length > 0) {
+            // Format torrents from both sources
+            const [zamundaStreams, arenabgStreams] = await Promise.all([
+                zamundaTorrents.length > 0 ? zamunda.formatTorrentsAsStreams(zamundaTorrents).catch(() => []) : [],
+                arenabgTorrents.length > 0 ? arenabg.formatTorrentsAsStreams(arenabgTorrents).catch(() => []) : []
+            ]);
+            
+            const allStreams = [...zamundaStreams, ...arenabgStreams];
+            
+            console.log(`Found ${zamundaStreams.length} Zamunda + ${arenabgStreams.length} ArenaBG streams for ${data.Title} (${imdbId})`);
+            return { streams: allStreams };
         } else {
             console.log(`No torrents found for ${data.Title} (${imdbId})`);
             return { streams: [] };
