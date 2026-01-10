@@ -1,5 +1,6 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const ZamundaAPI = require('./zamunda');
+const ArenaBGAPI = require('./arenabg');
 require('dotenv').config();
 
 // Use environment variables
@@ -11,9 +12,15 @@ const zamunda = new ZamundaAPI({
     password: process.env.ZAMUNDA_PASSWORD
 });
 
+// Initialize ArenaBG API with same credentials
+const arenabg = new ArenaBGAPI({
+    username: process.env.ZAMUNDA_USERNAME,
+    password: process.env.ZAMUNDA_PASSWORD
+});
+
 const manifest = {
     "id": "org.stremio.zamunda",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "name": "Zamunda",
     "description": "Stream torrents from Zamunda.net",
     "resources": ["stream"],
@@ -71,14 +78,57 @@ builder.defineStreamHandler(async function(args) {
             }
         }
         
-        // Ensure ZamundaAPI is initialized before use
-        await zamunda.ensureInitialized();
+        // Check if we have valid data
+        if (!data || !data.Title) {
+            console.log(`No OMDB data for ${imdbId}`);
+            return { streams: [] };
+        }
         
-        // Search for torrents on Zamunda
-        const torrents = await zamunda.searchByTitle(data.Title, data.Year);
-        if (torrents.length > 0) {
-            const streams = await zamunda.formatTorrentsAsStreams(torrents);
-            return { streams };
+        title = data.Title;
+        console.log(`🔍 Searching for: ${title} (${data.Year || 'unknown year'})`);
+        
+        // Ensure both APIs are initialized
+        await zamunda.ensureInitialized();
+        await arenabg.ensureInitialized();
+        
+        // Search both trackers in parallel
+        const [zamundaTorrents, arenabgTorrents] = await Promise.all([
+            zamunda.searchByTitle(data.Title, data.Year).catch(err => {
+                console.error('Zamunda search error:', err.message);
+                return [];
+            }),
+            arenabg.searchByTitle(data.Title, data.Year).catch(err => {
+                console.error('ArenaBG search error:', err.message);
+                return [];
+            })
+        ]);
+        
+        // Combine results from both trackers
+        const allTorrents = [...zamundaTorrents, ...arenabgTorrents];
+        
+        if (allTorrents.length > 0) {
+            // Format torrents from both sources
+            console.log('📦 Starting to format torrents as streams...');
+            const [zamundaStreams, arenabgStreams] = await Promise.all([
+                zamundaTorrents.length > 0 ? zamunda.formatTorrentsAsStreams(zamundaTorrents).catch(err => {
+                    console.error('Error formatting Zamunda streams:', err.message);
+                    return [];
+                }) : [],
+                arenabgTorrents.length > 0 ? arenabg.formatTorrentsAsStreams(arenabgTorrents).catch(err => {
+                    console.error('Error formatting ArenaBG streams:', err.message);
+                    return [];
+                }) : []
+            ]);
+            
+            console.log('✅ Formatting complete');
+            const allStreams = [...zamundaStreams, ...arenabgStreams];
+            
+            console.log(`Found ${zamundaStreams.length} Zamunda + ${arenabgStreams.length} ArenaBG streams for ${data.Title} (${imdbId})`);
+            console.log(`Total streams to return: ${allStreams.length}`);
+            if (allStreams.length > 0) {
+                console.log(`First stream sample:`, JSON.stringify(allStreams[0]).substring(0, 200));
+            }
+            return { streams: allStreams };
         } else {
             console.log(`No torrents found for ${data.Title} (${imdbId})`);
             return { streams: [] };
