@@ -82,8 +82,18 @@ class ArenaBGMovieParser {
 						}
 					}
 					
-					// Note: On ArenaBG website, flag-icon-bg means Bulgarian subtitles, not audio
-					// We'll detect Bulgarian audio from the title text instead
+					// Check for Bulgarian audio icon (.fa-volume-up with "Българско Озвучение" or "Bulgarian Audio" title)
+					let hasBulgarianAudio = false;
+					const volumeIcon = filenameCell.querySelector('.fa-volume-up');
+					if (volumeIcon) {
+						const title = volumeIcon.getAttribute('data-original-title') || volumeIcon.getAttribute('title') || volumeIcon.getAttribute('alt');
+						const titleLower = title ? title.toLowerCase() : '';
+						if (titleLower.includes('българско озвучение') || titleLower.includes('bulgarian audio')) {
+							hasBulgarianAudio = true;
+						}
+					}
+					
+					// Check for Bulgarian subtitles icon (flag-icon-bg means Bulgarian subtitles)
 					const hasBulgarianSubtitles = filenameCell.querySelector('.flag-icon-bg') !== null;
 					
 					// Store the detail page URL - we'll need to visit this to get the download key
@@ -106,7 +116,7 @@ class ArenaBGMovieParser {
 						seeders: seeders,
 						leechers: leechers,
 						size: size,
-						hasBulgarianAudio: false,  // Will be detected from title text
+						hasBulgarianAudio: hasBulgarianAudio,  // Detected from icon or will be detected from title text
 						hasBulgarianSubtitles: hasBulgarianSubtitles
 					});
 				} catch (rowError) {
@@ -137,13 +147,14 @@ class ArenaBGMovieParser {
 			movies.forEach(movie => {
 				const titleLower = movie.title.toLowerCase();
 				
-				// Check for Bulgarian audio indicators
-				if (titleLower.includes('bg audio') || 
+				// Check for Bulgarian audio indicators in title (only if not already detected from icon)
+				if (!movie.hasBulgarianAudio && 
+					(titleLower.includes('bg audio') || 
 					titleLower.includes('bgaudio') || 
 					titleLower.includes('bg+enaudio') ||
 					titleLower.includes('bulgarian audio') ||
 					titleLower.includes('българско озвучение') ||
-					titleLower.includes('дубляж')) {
+					titleLower.includes('дубляж'))) {
 					movie.hasBulgarianAudio = true;
 					movie.flags = movie.flags || [];
 					movie.flags.push('bg_audio');
@@ -426,8 +437,8 @@ class ArenaBGMovieParser {
 
 		const tasks = torrents.map((torrent) => withLimit(async () => {
 			try {
-				// Prefer resolution from URL (torrent name)
-				const resolution = this.extractResolution(torrent.url);
+				// Extract resolution from title (contains quality info like "1080p", "720p", etc.)
+				const resolution = this.extractResolution(torrent.title);
 
 				// Try to get torrent buffer
 				let torrentBuffer = null;
@@ -439,11 +450,9 @@ class ArenaBGMovieParser {
 				if (torrentBuffer) {
 					const metadata = this.parseTorrentMetadata(torrentBuffer);
 					if (metadata) {
-						const streamTitle = `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'} 💾 ${metadata.size}`;
-						console.log(`[Stream] ${torrent.hasBulgarianAudio ? '🇧🇬' : '  '} ${torrent.title.substring(0, 50)}`);
 						return {
 							name: `arenabg\n${resolution}`,
-							title: streamTitle,
+							title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders ?? 'Unknown'} 💾 ${metadata.size}`,
 							infoHash: metadata.infoHash,
 							type: 'stream'
 						};
@@ -453,7 +462,7 @@ class ArenaBGMovieParser {
 				// Fallback: return basic stream info without parsing
 				return {
 					name: `arenabg\n${resolution}`,
-					title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'}`,
+					title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders ?? 'Unknown'}`,
 					url: torrent.url,
 					type: 'movie'
 				};
