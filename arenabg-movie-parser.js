@@ -450,6 +450,8 @@ class ArenaBGMovieParser {
 				if (torrentBuffer) {
 					const metadata = this.parseTorrentMetadata(torrentBuffer);
 					if (metadata) {
+						const streamTitle = `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'} 💾 ${metadata.size}`;
+						console.log(`[Stream] ${torrent.hasBulgarianAudio ? '🇧🇬' : '  '} ${torrent.title.substring(0, 50)}`);
 						return {
 							name: `arenabg\n${resolution}`,
 							title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders ?? 'Unknown'} 💾 ${metadata.size}`,
