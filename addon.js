@@ -1,22 +1,57 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const ZamundaAPI = require('./zamunda');
+const ZamundaCHAPI = require('./zamunda-ch');
+const ZamundaSEAPI = require('./zamunda-se');
 const ArenaBGAPI = require('./arenabg');
 require('dotenv').config();
 
 // Use environment variables
 const OMDB_API_KEY = process.env.OMDB_API_KEY;
 
-// Initialize Zamunda API with credentials
-const zamunda = new ZamundaAPI({
-    username: process.env.ZAMUNDA_USERNAME,
-    password: process.env.ZAMUNDA_PASSWORD
-});
+// Parse tracker enable/disable flags
+const TRACKERS_ENABLED = {
+    zamundaNet: process.env.ZAMUNDA_NET === 'true',
+    zamundaCh: process.env.ZAMUNDA_CH === 'true',
+    zamundaSe: process.env.ZAMUNDA_SE === 'true',
+    arenabg: process.env.ARENABG_COM === 'true'
+};
 
-// Initialize ArenaBG API with same credentials
-const arenabg = new ArenaBGAPI({
-    username: process.env.ZAMUNDA_USERNAME,
-    password: process.env.ZAMUNDA_PASSWORD
-});
+// Initialize tracker APIs based on configuration
+const trackers = {};
+
+// Initialize Zamunda.net if enabled
+if (TRACKERS_ENABLED.zamundaNet) {
+    trackers.zamundaNet = new ZamundaAPI({
+        username: process.env.ZAMUNDA_USERNAME,
+        password: process.env.ZAMUNDA_PASSWORD
+    });
+}
+
+// Initialize Zamunda.ch if enabled
+if (TRACKERS_ENABLED.zamundaCh) {
+    trackers.zamundaCh = new ZamundaCHAPI({
+        username: process.env.ZAMUNDA_USERNAME,
+        password: process.env.ZAMUNDA_PASSWORD
+    });
+}
+
+// Initialize Zamunda.se if enabled
+if (TRACKERS_ENABLED.zamundaSe) {
+    trackers.zamundaSe = new ZamundaSEAPI({
+        username: process.env.ZAMUNDA_SE_USERNAME || process.env.ZAMUNDA_USERNAME,
+        password: process.env.ZAMUNDA_SE_PASSWORD || process.env.ZAMUNDA_PASSWORD
+    });
+}
+
+// Initialize ArenaBG if enabled
+if (TRACKERS_ENABLED.arenabg) {
+    trackers.arenabg = new ArenaBGAPI({
+        username: process.env.ZAMUNDA_USERNAME,
+        password: process.env.ZAMUNDA_PASSWORD
+    });
+}
+
+console.log('Enabled trackers:', Object.keys(trackers).join(', '));
 
 const manifest = {
     "id": "org.stremio.zamunda",
@@ -87,43 +122,96 @@ builder.defineStreamHandler(async function(args) {
         title = data.Title;
         console.log(`🔍 Searching for: ${title} (${data.Year || 'unknown year'})`);
         
-        // Ensure both APIs are initialized
-        await zamunda.ensureInitialized();
-        await arenabg.ensureInitialized();
+        // Ensure all enabled trackers are initialized
+        const initPromises = Object.values(trackers).map(tracker => tracker.ensureInitialized());
+        await Promise.all(initPromises);
         
-        // Search both trackers in parallel
-        const [zamundaTorrents, arenabgTorrents] = await Promise.all([
-            zamunda.searchByTitle(data.Title, data.Year).catch(err => {
-                console.error('Zamunda search error:', err.message);
-                return [];
-            }),
-            arenabg.searchByTitle(data.Title, data.Year).catch(err => {
-                console.error('ArenaBG search error:', err.message);
-                return [];
-            })
-        ]);
+        // Search all enabled trackers in parallel
+        const searchPromises = [];
+        const trackerNames = [];
         
-        // Combine results from both trackers
-        const allTorrents = [...zamundaTorrents, ...arenabgTorrents];
+        if (trackers.zamundaNet) {
+            searchPromises.push(
+                trackers.zamundaNet.searchByTitle(data.Title, data.Year).catch(err => {
+                    console.error('Zamunda.net search error:', err.message);
+                    return [];
+                })
+            );
+            trackerNames.push('zamundaNet');
+        }
+        
+        if (trackers.zamundaCh) {
+            searchPromises.push(
+                trackers.zamundaCh.searchByTitle(data.Title, data.Year).catch(err => {
+                    console.error('Zamunda.ch search error:', err.message);
+                    return [];
+                })
+            );
+            trackerNames.push('zamundaCh');
+        }
+        
+        if (trackers.zamundaSe) {
+            searchPromises.push(
+                trackers.zamundaSe.searchByTitle(data.Title, data.Year).catch(err => {
+                    console.error('Zamunda.se search error:', err.message);
+                    return [];
+                })
+            );
+            trackerNames.push('zamundaSe');
+        }
+        
+        if (trackers.arenabg) {
+            searchPromises.push(
+                trackers.arenabg.searchByTitle(data.Title, data.Year).catch(err => {
+                    console.error('ArenaBG search error:', err.message);
+                    return [];
+                })
+            );
+            trackerNames.push('arenabg');
+        }
+        
+        const searchResults = await Promise.all(searchPromises);
+        
+        // Map results to tracker names
+        const trackerResults = {};
+        trackerNames.forEach((name, index) => {
+            trackerResults[name] = searchResults[index];
+        });
+        
+        // Combine results from all trackers
+        const allTorrents = searchResults.flat();
         
         if (allTorrents.length > 0) {
-            // Format torrents from both sources
+            // Format torrents from all sources
             console.log('📦 Starting to format torrents as streams...');
-            const [zamundaStreams, arenabgStreams] = await Promise.all([
-                zamundaTorrents.length > 0 ? zamunda.formatTorrentsAsStreams(zamundaTorrents).catch(err => {
-                    console.error('Error formatting Zamunda streams:', err.message);
-                    return [];
-                }) : [],
-                arenabgTorrents.length > 0 ? arenabg.formatTorrentsAsStreams(arenabgTorrents).catch(err => {
-                    console.error('Error formatting ArenaBG streams:', err.message);
-                    return [];
-                }) : []
-            ]);
+            
+            const formatPromises = [];
+            trackerNames.forEach(name => {
+                if (trackerResults[name].length > 0) {
+                    formatPromises.push(
+                        trackers[name].formatTorrentsAsStreams(trackerResults[name]).catch(err => {
+                            console.error(`Error formatting ${name} streams:`, err.message);
+                            return [];
+                        })
+                    );
+                } else {
+                    formatPromises.push(Promise.resolve([]));
+                }
+            });
+            
+            const formattedStreams = await Promise.all(formatPromises);
             
             console.log('✅ Formatting complete');
-            const allStreams = [...zamundaStreams, ...arenabgStreams];
+            const allStreams = formattedStreams.flat();
             
-            console.log(`Found ${zamundaStreams.length} Zamunda + ${arenabgStreams.length} ArenaBG streams for ${data.Title} (${imdbId})`);
+            // Log results per tracker
+            trackerNames.forEach((name, index) => {
+                const count = formattedStreams[index].length;
+                if (count > 0) {
+                    console.log(`Found ${count} ${name} streams for ${data.Title} (${imdbId})`);
+                }
+            });
+            
             console.log(`Total streams to return: ${allStreams.length}`);
             if (allStreams.length > 0) {
                 console.log(`First stream sample:`, JSON.stringify(allStreams[0]).substring(0, 200));
