@@ -22,32 +22,32 @@ const trackers = {};
 // Initialize Zamunda.net if enabled
 if (TRACKERS_ENABLED.zamundaNet) {
     trackers.zamundaNet = new ZamundaAPI({
-        username: process.env.ZAMUNDA_USERNAME,
-        password: process.env.ZAMUNDA_PASSWORD
+        username: process.env.ZAMUNDA_NET_USERNAME,
+        password: process.env.ZAMUNDA_NET_PASSWORD
     });
 }
 
 // Initialize Zamunda.ch if enabled
 if (TRACKERS_ENABLED.zamundaCh) {
     trackers.zamundaCh = new ZamundaCHAPI({
-        username: process.env.ZAMUNDA_USERNAME,
-        password: process.env.ZAMUNDA_PASSWORD
+        username: process.env.ZAMUNDA_CH_USERNAME,
+        password: process.env.ZAMUNDA_CH_PASSWORD
     });
 }
 
 // Initialize Zamunda.se if enabled
 if (TRACKERS_ENABLED.zamundaSe) {
     trackers.zamundaSe = new ZamundaSEAPI({
-        username: process.env.ZAMUNDA_SE_USERNAME || process.env.ZAMUNDA_USERNAME,
-        password: process.env.ZAMUNDA_SE_PASSWORD || process.env.ZAMUNDA_PASSWORD
+        username: process.env.ZAMUNDA_SE_USERNAME,
+        password: process.env.ZAMUNDA_SE_PASSWORD
     });
 }
 
 // Initialize ArenaBG if enabled
 if (TRACKERS_ENABLED.arenabg) {
     trackers.arenabg = new ArenaBGAPI({
-        username: process.env.ZAMUNDA_USERNAME,
-        password: process.env.ZAMUNDA_PASSWORD
+        username: process.env.ARENABG_USERNAME,
+        password: process.env.ARENABG_PASSWORD
     });
 }
 

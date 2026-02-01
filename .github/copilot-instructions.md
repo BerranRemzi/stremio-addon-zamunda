@@ -17,7 +17,10 @@ cp .env.example .env
 
 Required variables in `.env`:
 - `PORT=7000` (server port)
-- `ZAMUNDA_USERNAME` and `ZAMUNDA_PASSWORD` (tracker credentials)
+- `ZAMUNDA_NET_USERNAME` and `ZAMUNDA_NET_PASSWORD` (Zamunda.net credentials)
+- `ZAMUNDA_CH_USERNAME` and `ZAMUNDA_CH_PASSWORD` (Zamunda.ch credentials)
+- `ZAMUNDA_SE_USERNAME` and `ZAMUNDA_SE_PASSWORD` (Zamunda.se credentials)
+- `ARENABG_USERNAME` and `ARENABG_PASSWORD` (ArenaBG credentials)
 - `ZAMUNDA_NET`, `ZAMUNDA_CH`, `ZAMUNDA_SE`, `ARENABG_COM` (true/false - tracker toggles)
 - `OMDB_API_KEY` (optional, for better title matching)
 
@@ -106,7 +109,7 @@ Only enabled trackers are initialized in `addon.js`. All enabled trackers are se
 
 ### Zamunda.ch Special Notes
 - **GET-based login**: `https://zamunda.ch/takelogin.php?username=X&password=Y`
-- **Shares credentials** with Zamunda.net (uses `ZAMUNDA_USERNAME/PASSWORD`)
+- **Uses dedicated credentials**: `ZAMUNDA_CH_USERNAME` and `ZAMUNDA_CH_PASSWORD`
 
 ### ArenaBG Two-Step Download
 ArenaBG requires visiting detail page first to extract download key before getting torrent:
