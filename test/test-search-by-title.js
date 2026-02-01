@@ -1,5 +1,5 @@
-const ArenaBGAPI = require('./../arenabg');
-const ZamundaAPI = require('./../zamunda');
+const ArenaBGAPI = require('../src/trackers/arenabg');
+const ZamundaAPI = require('../src/trackers/zamunda');
 require('dotenv').config({ path: './../.env' });
 
 console.log('='.repeat(80));

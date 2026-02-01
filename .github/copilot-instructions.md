@@ -68,21 +68,21 @@ node test/test-bulgarian-audio-flag.js # Audio detection
 ### Core Entry Points
 - **`server.js`** - Local development HTTP server (port 7000)
 - **`serverless.js`** - Vercel serverless function handler
-- **`addon.js`** - Main addon logic, stream handler, multi-tracker orchestration
+- **`src/addon.js`** - Main addon logic, stream handler, multi-tracker orchestration
 
 ### Tracker APIs (4 separate implementations)
-- **`zamunda.js`** - Zamunda.net (POST login, new HTML structure)
-- **`zamunda-ch.js`** - Zamunda.ch (GET login via URL params)
-- **`zamunda-se.js`** - Zamunda.se (HTTP protocol, `/catalogue.php` search)
-- **`arenabg.js`** - ArenaBG.com (POST login, two-step download process)
+- **`src/trackers/zamunda.js`** - Zamunda.net (POST login, new HTML structure)
+- **`src/trackers/zamunda-ch.js`** - Zamunda.ch (GET login via URL params)
+- **`src/trackers/zamunda-se.js`** - Zamunda.se (HTTP protocol, `/catalogue.php` search)
+- **`src/trackers/arenabg.js`** - ArenaBG.com (POST login, two-step download process)
 
 ### HTML Parsers
-- **`zamunda-movie-parser.js`** - Parses Zamunda.net/Zamunda.ch HTML (newer structure)
-- **`zamunda-se-movie-parser.js`** - Parses Zamunda.se HTML (legacy structure from 10 years ago)
-- **`arenabg-movie-parser.js`** - Parses ArenaBG HTML with Bulgarian audio detection
+- **`src/parsers/zamunda-movie-parser.js`** - Parses Zamunda.net/Zamunda.ch HTML (newer structure)
+- **`src/parsers/zamunda-se-movie-parser.js`** - Parses Zamunda.se HTML (legacy structure from 10 years ago)
+- **`src/parsers/arenabg-movie-parser.js`** - Parses ArenaBG HTML with Bulgarian audio detection
 
 ### Utilities
-- **`torrentFileManager.js`** - In-memory LRU cache (max 50 torrents, no filesystem)
+- **`src/utils/torrentFileManager.js`** - In-memory LRU cache (max 50 torrents, no filesystem)
 
 ### Configuration
 - **`now.json`** - Vercel deployment config (routes all traffic to `serverless.js`)
@@ -162,22 +162,26 @@ const html = decoder.decode(response.data);
 
 ### Root Directory Files
 ```
-addon.js              - Main addon interface (stream handler)
 server.js             - Local HTTP server
 serverless.js         - Vercel handler
-zamunda.js            - Zamunda.net API
-zamunda-ch.js         - Zamunda.ch API (GET login)
-zamunda-se.js         - Zamunda.se API (HTTP, old version)
-arenabg.js            - ArenaBG API
-zamunda-movie-parser.js        - Parser for .net/.ch
-zamunda-se-movie-parser.js     - Parser for .se (legacy)
-arenabg-movie-parser.js        - Parser for ArenaBG
-torrentFileManager.js - In-memory cache
 package.json          - Dependencies & scripts
 now.json              - Vercel config
 .env                  - Credentials (NEVER commit)
 .env.example          - Template for .env
 .gitignore            - Excludes node_modules, .env, logs
+src/
+  addon.js            - Main addon interface (stream handler)
+  trackers/
+    zamunda.js        - Zamunda.net API
+    zamunda-ch.js     - Zamunda.ch API (GET login)
+    zamunda-se.js     - Zamunda.se API (HTTP, old version)
+    arenabg.js        - ArenaBG API
+  parsers/
+    zamunda-movie-parser.js     - Parser for .net/.ch
+    zamunda-se-movie-parser.js  - Parser for .se (legacy)
+    arenabg-movie-parser.js     - Parser for ArenaBG
+  utils/
+    torrentFileManager.js       - In-memory cache
 ```
 
 ### Test Directory (`test/`)

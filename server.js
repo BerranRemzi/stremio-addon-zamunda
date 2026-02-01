@@ -9,6 +9,6 @@ process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
 });
 
-const addonInterface = require("./addon");
+const addonInterface = require("./src/addon");
 serveHTTP(addonInterface, { port: 7000 });
 

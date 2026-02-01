@@ -1,4 +1,4 @@
-const ZamundaSEAPI = require('../zamunda-se');
+const ZamundaSEAPI = require('../src/trackers/zamunda-se');
 const fs = require('fs');
 require('dotenv').config();
 

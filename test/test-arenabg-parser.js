@@ -1,5 +1,5 @@
 const fs = require('fs');
-const ArenaBGMovieParser = require('./../arenabg-movie-parser');
+const ArenaBGMovieParser = require('../src/parsers/arenabg-movie-parser');
 const path = require('path');
 
 // Read the saved HTML file
