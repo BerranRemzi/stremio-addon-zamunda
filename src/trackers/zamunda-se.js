@@ -1,15 +1,15 @@
 const axios = require('axios');
 const tough = require('tough-cookie');
 const { TextDecoder } = require('util');
-const TorrentFileManager = require('./torrentFileManager');
-const ArenaBGMovieParser = require('./arenabg-movie-parser');
+const TorrentFileManager = require('../utils/torrentFileManager');
+const ZamundaSEMovieParser = require('../parsers/zamunda-se-movie-parser');
 
-class ArenaBGAPI {
+class ZamundaSEAPI {
 	constructor(config) {
 		this.config = {
 			username: config.username,
 			password: config.password,
-			baseUrl: 'https://arenabg.com'
+			baseUrl: 'http://zamunda.se'
 		};
 		
 		// Initialize async components
@@ -18,7 +18,7 @@ class ArenaBGAPI {
 		this.isLoggedIn = false;
 		this.loginPromise = null;
 		this.torrentManager = new TorrentFileManager();
-		this.movieParser = new ArenaBGMovieParser(this.config.baseUrl);
+		this.movieParser = new ZamundaSEMovieParser(this.config.baseUrl);
 		this.initialized = false;
 	}
 
@@ -31,7 +31,7 @@ class ArenaBGAPI {
 			this.client = wrapper(axios.create({ jar: this.cookieJar }));
 			this.initialized = true;
 		} catch (error) {
-			throw new Error(`Failed to initialize ArenaBGAPI: ${error.message}`);
+			throw new Error(`Failed to initialize ZamundaSEAPI: ${error.message}`);
 		}
 	}
 
@@ -58,65 +58,50 @@ class ArenaBGAPI {
 				await this.ensureInitialized();
 
 				// First, get the login page to get any CSRF tokens if needed
-				const loginPageResponse = await this.client.get(`${this.config.baseUrl}/bg/users/signin/`, {
+				await this.client.get(`${this.config.baseUrl}/takelogin.php`, {
 					timeout: 10000, // 10 second timeout
 					headers: {
 						'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 					}
 				});
 
-				// Perform login - ArenaBG uses /bg/users/signin/ for login
-				// Try different field names as the site might use different parameters
+				// Perform login
 				const loginResponse = await this.client.post(
-					`${this.config.baseUrl}/bg/users/signin/`,
+					`${this.config.baseUrl}/takelogin.php`,
 					new URLSearchParams({
-						username_or_email: this.config.username,
-						password: this.config.password
+						username: this.config.username,
+						password: this.config.password,
+						returnto: '/'
 					}),
 					{
 						timeout: 15000, // 15 second timeout for login
 						headers: {
 							'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
 							'Content-Type': 'application/x-www-form-urlencoded',
-							'Referer': `${this.config.baseUrl}/bg/users/signin/`
+							'Referer': `${this.config.baseUrl}/login.php`
 						},
 						maxRedirects: 5
 					}
 				);
 
-				// Check if login was successful - check for any cookies
+				// Check if login was successful
 				const cookies = await this.cookieJar.getCookies(this.config.baseUrl);
-				
-				// Log all cookies for debugging
-				if (cookies.length > 0) {
-					console.log('[ArenaBG] Cookies received:', cookies.map(c => c.key).join(', '));
-				}
-				
 				const hasSessionCookie = cookies.some(c => 
 					c.key.toLowerCase().includes('session') || 
 					c.key.toLowerCase().includes('uid') ||
-					c.key.toLowerCase().includes('pass') ||
-					c.key.toLowerCase().includes('user') ||
-					c.key.toLowerCase().includes('phpsessid') ||
-					c.key.toLowerCase().includes('arena') ||
-					c.value.length > 10 // Any substantial cookie value
+					c.key.toLowerCase().includes('pass')
 				);
 
-				// Consider login successful if we got any response (status 200) and some cookies
-				// The actual test will be if we can search
-				if (hasSessionCookie || cookies.length > 0 || loginResponse.status === 200) {
+				if (hasSessionCookie) {
 					this.isLoggedIn = true;
-					console.log('✓ ArenaBG login successful (will verify with search)');
 					return true;
 				} else {
-					console.error('✗ ArenaBG login failed - no session cookie found');
+					console.error('✗ Zamunda.se Login failed - no session cookie found');
 					console.log('Response status:', loginResponse.status);
-					// Still mark as logged in to allow search attempt
-					this.isLoggedIn = true;
-					return true;
+					return false;
 				}
 			} catch (error) {
-				console.error('✗ ArenaBG login error:', error.message);
+				console.error('✗ Zamunda.se Login error:', error.message);
 				return false;
 			} finally {
 				this.loginPromise = null;
@@ -126,6 +111,7 @@ class ArenaBGAPI {
 		return this.loginPromise;
 	}
 
+// Login function
 	// Helper method to ensure we're logged in before making requests
 	async ensureLoggedIn() {
 		await this.ensureInitialized();
@@ -135,14 +121,14 @@ class ArenaBGAPI {
 		return this.isLoggedIn;
 	}
 
-	// Search method using the ArenaBG torrents URL structure
+	// Search method
 	async search(query) {
 		try {
 			await this.ensureLoggedIn();
 
-			// ArenaBG torrents search URL: /bg/torrents/?text=query
-			const searchUrl = `${this.config.baseUrl}/bg/torrents/?text=${encodeURIComponent(query)}`;
+			const searchUrl = `${this.config.baseUrl}/catalogue.php?search=${encodeURIComponent(query).replace(/%20/g, '+')}&catalog=movies`;
 			
+
 			const response = await this.client.get(searchUrl, {
 				timeout: 15000, // 15 second timeout
 				headers: {
@@ -152,29 +138,19 @@ class ArenaBGAPI {
 				responseType: 'arraybuffer'
 			});
 
-			// Decode the response with UTF-8 encoding (ArenaBG uses UTF-8 instead of Windows-1251)
-			const decoder = new TextDecoder('utf-8');
-			const html = decoder.decode(response.data);
-			
-			// Debug: Check if we have table content
-			const hasTable = html.includes('table-torrents') || html.includes('table.table');
-			const hasLoginForm = html.includes('signin') || html.includes('login');
-			console.log(`[ArenaBG] HTML received: ${html.length} bytes, has table: ${hasTable}, has login form: ${hasLoginForm}`);
-			
-			// Debug: Save HTML to file for inspection
-			if (!hasTable && process.env.DEBUG_ARENABG) {
-				const fs = require('fs');
-				fs.writeFileSync('debug-arenabg-response.html', html, 'utf-8');
-				console.log(`[ArenaBG] DEBUG: HTML saved to debug-arenabg-response.html`);
-			}
-			
-			// Use the movie parser to extract movie data
-			return this.movieParser.parseMovies(html, query);
+				// Decode the response with Windows-1251 (Cyrillic) encoding
+				const decoder = new TextDecoder('windows-1251');
+				const html = decoder.decode(response.data);
+				
+				// Use the movie parser to extract movie data
+				return this.movieParser.parseMovies(html, query);
 		} catch (error) {
-			console.error('Error searching ArenaBG:', error.message);
+			console.error('Error searching Zamunda.se:', error.message);
 			return [];
 		}
 	}
+
+
 
 	/**
 	 * Search for movies by title and optionally by year
@@ -191,7 +167,7 @@ class ArenaBGAPI {
 
 			// Print the searched movie
 			const searchDisplay = year ? `${title} (${year})` : title;
-			console.log(`🔍 [ArenaBG] Searching for: ${searchDisplay}`);
+			console.log(`🔍 [Zamunda.se] Searching for: ${searchDisplay}`);
 			
 			// Normalize the search title (replace hyphens, dots, colons with spaces)
 			const normalizedTitle = this.normalizeSearchTitle(title);
@@ -201,24 +177,25 @@ class ArenaBGAPI {
 			const results = await this.search(searchQuery);
 			
 			if (results.length === 0) {
-				console.log(`❌ [ArenaBG] No movies found for: ${searchDisplay}`);
+				console.log(`❌ [Zamunda.se] No movies found for: ${searchDisplay}`);
 				return [];
 			}
+
 
 			// Filter results based on title and year matching
 			const filteredResults = this.filterMoviesByTitleAndYear(results, normalizedTitle, year);
 			
 			if (filteredResults.length === 0) {
-				console.log(`❌ [ArenaBG] No matching movies found for: ${searchDisplay}`);
+				console.log(`❌ [Zamunda.se] No matching movies found for: ${searchDisplay}`);
 				return [];
 			}
 
-			console.log(`✅ [ArenaBG] Found ${filteredResults.length} matching movies for: ${searchDisplay}`);
+			console.log(`✅ [Zamunda.se] Found ${filteredResults.length} matching movies for: ${searchDisplay}`);
 			
 			// Convert filtered results to torrents
 			return this.movieParser.convertMoviesToTorrents(filteredResults);
 		} catch (error) {
-			console.error(`Error searching ArenaBG by title: ${error.message}`);
+			throw new Error(`Error searching by title: ${error.message}`);
 			return [];
 		}
 	}
@@ -263,6 +240,7 @@ class ArenaBGAPI {
 		});
 	}
 
+
 	/**
 	 * Extract year from movie title
 	 * @param {string} title - Movie title that may contain year
@@ -299,89 +277,27 @@ class ArenaBGAPI {
 			// Save the torrent file to in-memory cache
 			return await this.torrentManager.saveTorrentFile(torrentUrl, response.data);
 		} catch (error) {
-			console.error(`Error downloading torrent file: ${error.message}`);
-			return null;
-		}
-	}
-
-	/**
-	 * Fetch torrent detail page and extract download key
-	 * @param {string} detailUrl - URL of the torrent detail page
-	 * @returns {Promise<string|null>} Download URL with key or null if failed
-	 */
-	async getDownloadUrl(detailUrl) {
-		try {
-			await this.ensureLoggedIn();
-			
-			// Fetch the detail page
-			const response = await this.client.get(detailUrl, {
-				timeout: 10000,
-				headers: {
-					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-				},
-				responseType: 'arraybuffer'
-			});
-
-			const decoder = new TextDecoder('utf-8');
-			const html = decoder.decode(response.data);
-			
-			// Extract download key from the page
-			const downloadKey = this.movieParser.extractDownloadKey(html);
-			
-			if (downloadKey) {
-				return `${this.config.baseUrl}/bg/torrents/download/?key=${downloadKey}`;
-			}
-			
-			console.error(`[ArenaBG] Could not find download key in detail page: ${detailUrl}`);
-			return null;
-		} catch (error) {
-			console.error(`[ArenaBG] Error fetching detail page: ${error.message}`);
+			throw new Error(`Error downloading torrent file: ${error.message}`);
+			// Return null instead of throwing to allow graceful degradation
 			return null;
 		}
 	}
 
 	// Format torrents as Stremio streams (bounded parallelism)
 	async formatTorrentsAsStreams(torrents) {
-		try {
-			// Create a function to get torrent buffer for the parser
-			const getTorrentBuffer = async (torrentUrl) => {
-				// Try to get cached torrent buffer first
-				let torrentBuffer = await this.torrentManager.getLocalPath(torrentUrl);
-				if (!torrentBuffer) {
-					torrentBuffer = await this.downloadTorrentFile(torrentUrl);
-				}
-				return torrentBuffer;
-			};
+		// Create a function to get torrent buffer for the parser
+		const getTorrentBuffer = async (torrentUrl) => {
+			// Try to get cached torrent buffer first
+			let torrentBuffer = await this.torrentManager.getLocalPath(torrentUrl);
+			if (!torrentBuffer) {
+				torrentBuffer = await this.downloadTorrentFile(torrentUrl);
+			}
+			return torrentBuffer;
+		};
 
-			// First, fetch download URLs for all torrents that need them
-			const torrentsWithUrls = await Promise.all(torrents.map(async (torrent) => {
-				try {
-					if (!torrent.url && torrent.detailUrl) {
-						// Need to fetch the detail page to get download URL
-						const downloadUrl = await this.getDownloadUrl(torrent.detailUrl);
-						if (!downloadUrl) {
-							console.error(`[ArenaBG] Skipping torrent - no download URL: ${torrent.title}`);
-							return null; // Skip this torrent
-						}
-						return { ...torrent, url: downloadUrl };
-					}
-					return torrent;
-				} catch (error) {
-					console.error(`[ArenaBG] Error processing torrent ${torrent.title}: ${error.message}`);
-					return null;
-				}
-			}));
-			
-			// Filter out failed torrents
-			const validTorrents = torrentsWithUrls.filter(t => t !== null);
-
-			// Use the movie parser to format torrents as streams
-			return await this.movieParser.formatTorrentsAsStreams(validTorrents, getTorrentBuffer);
-		} catch (error) {
-			console.error(`[ArenaBG] Error in formatTorrentsAsStreams: ${error.message}`);
-			return [];
-		}
+		// Use the movie parser to format torrents as streams
+		return await this.movieParser.formatTorrentsAsStreams(torrents, getTorrentBuffer);
 	}
 }
 
-module.exports = ArenaBGAPI;
+module.exports = ZamundaSEAPI;

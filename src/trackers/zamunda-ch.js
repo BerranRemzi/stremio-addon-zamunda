@@ -1,16 +1,15 @@
 const axios = require('axios');
 const tough = require('tough-cookie');
 const { TextDecoder } = require('util');
-const TorrentFileManager = require('./torrentFileManager');
-const ZamundaMovieParser = require('./zamunda-movie-parser');
-// Removed fs dependency - using in-memory caching instead
+const TorrentFileManager = require('../utils/torrentFileManager');
+const ZamundaMovieParser = require('../parsers/zamunda-movie-parser');
 
-class ZamundaAPI {
+class ZamundaCHAPI {
 	constructor(config) {
 		this.config = {
 			username: config.username,
 			password: config.password,
-			baseUrl: 'https://zamunda.net'
+			baseUrl: 'https://zamunda.ch'
 		};
 		
 		// Initialize async components
@@ -32,7 +31,7 @@ class ZamundaAPI {
 			this.client = wrapper(axios.create({ jar: this.cookieJar }));
 			this.initialized = true;
 		} catch (error) {
-			throw new Error(`Failed to initialize ZamundaAPI: ${error.message}`);
+			throw new Error(`Failed to initialize ZamundaCHAPI: ${error.message}`);
 		}
 	}
 
@@ -43,7 +42,7 @@ class ZamundaAPI {
 		}
 	}
 
-	// Login method
+	// Login method - uses GET request with username and password in URL
 	async login() {
 		if (this.isLoggedIn) {
 			return true;
@@ -58,32 +57,17 @@ class ZamundaAPI {
 			try {
 				await this.ensureInitialized();
 
-				// First, get the login page to get any CSRF tokens if needed
-				await this.client.get(`${this.config.baseUrl}/takelogin.php`, {
-					timeout: 10000, // 10 second timeout
+				// Perform login using GET request with credentials in URL
+				const loginUrl = `${this.config.baseUrl}/takelogin.php?username=${encodeURIComponent(this.config.username)}&password=${encodeURIComponent(this.config.password)}`;
+				
+				const loginResponse = await this.client.get(loginUrl, {
+					timeout: 15000, // 15 second timeout for login
 					headers: {
-						'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-					}
+						'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+						'Referer': `${this.config.baseUrl}/login.php`
+					},
+					maxRedirects: 5
 				});
-
-				// Perform login
-				const loginResponse = await this.client.post(
-					`${this.config.baseUrl}/takelogin.php`,
-					new URLSearchParams({
-						username: this.config.username,
-						password: this.config.password,
-						returnto: '/'
-					}),
-					{
-						timeout: 15000, // 15 second timeout for login
-						headers: {
-							'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-							'Content-Type': 'application/x-www-form-urlencoded',
-							'Referer': `${this.config.baseUrl}/login.php`
-						},
-						maxRedirects: 5
-					}
-				);
 
 				// Check if login was successful
 				const cookies = await this.cookieJar.getCookies(this.config.baseUrl);
@@ -95,14 +79,15 @@ class ZamundaAPI {
 
 				if (hasSessionCookie) {
 					this.isLoggedIn = true;
+					console.log('✓ Zamunda.ch Login successful');
 					return true;
 				} else {
-					console.error('✗ Login failed - no session cookie found');
+					console.error('✗ Zamunda.ch Login failed - no session cookie found');
 					console.log('Response status:', loginResponse.status);
 					return false;
 				}
 			} catch (error) {
-				console.error('✗ Login error:', error.message);
+				console.error('✗ Zamunda.ch Login error:', error.message);
 				return false;
 			} finally {
 				this.loginPromise = null;
@@ -146,7 +131,7 @@ class ZamundaAPI {
 				// Use the movie parser to extract movie data
 				return this.movieParser.parseMovies(html, query);
 		} catch (error) {
-			console.error('Error searching Zamunda:', error.message);
+			console.error('Error searching Zamunda.ch:', error.message);
 			return [];
 		}
 	}
@@ -168,7 +153,7 @@ class ZamundaAPI {
 
 			// Print the searched movie
 			const searchDisplay = year ? `${title} (${year})` : title;
-			console.log(`🔍 Searching for: ${searchDisplay}`);
+			console.log(`🔍 [Zamunda.ch] Searching for: ${searchDisplay}`);
 			
 			// Normalize the search title (replace hyphens, dots, colons with spaces)
 			const normalizedTitle = this.normalizeSearchTitle(title);
@@ -178,7 +163,7 @@ class ZamundaAPI {
 			const results = await this.search(searchQuery);
 			
 			if (results.length === 0) {
-				console.log(`❌ No movies found for: ${searchDisplay}`);
+				console.log(`❌ [Zamunda.ch] No movies found for: ${searchDisplay}`);
 				return [];
 			}
 
@@ -187,11 +172,11 @@ class ZamundaAPI {
 			const filteredResults = this.filterMoviesByTitleAndYear(results, normalizedTitle, year);
 			
 			if (filteredResults.length === 0) {
-				console.log(`❌ No matching movies found for: ${searchDisplay}`);
+				console.log(`❌ [Zamunda.ch] No matching movies found for: ${searchDisplay}`);
 				return [];
 			}
 
-			console.log(`✅ Found ${filteredResults.length} matching movies for: ${searchDisplay}`);
+			console.log(`✅ [Zamunda.ch] Found ${filteredResults.length} matching movies for: ${searchDisplay}`);
 			
 			// Convert filtered results to torrents
 			return this.movieParser.convertMoviesToTorrents(filteredResults);
@@ -301,5 +286,4 @@ class ZamundaAPI {
 	}
 }
 
-module.exports = ZamundaAPI;
-
+module.exports = ZamundaCHAPI;

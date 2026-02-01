@@ -1,4 +1,4 @@
-const ArenaBGMovieParser = require('./../arenabg-movie-parser');
+const ArenaBGMovieParser = require('../src/parsers/arenabg-movie-parser');
 
 const parser = new ArenaBGMovieParser();
 

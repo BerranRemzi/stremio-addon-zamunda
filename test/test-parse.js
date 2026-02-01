@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const ArenaBGMovieParser = require('./../arenabg-movie-parser');
+const ArenaBGMovieParser = require('../src/parsers/arenabg-movie-parser');
 
 console.log('='.repeat(80));
 console.log('ArenaBG Parser Test');
