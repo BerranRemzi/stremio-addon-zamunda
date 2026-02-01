@@ -1,4 +1,4 @@
-const ArenaBGAPI = require('./../arenabg');
+const ArenaBGAPI = require('../src/trackers/arenabg');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 

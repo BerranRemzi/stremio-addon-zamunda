@@ -1,4 +1,4 @@
-const ZamundaCHAPI = require('../zamunda-ch');
+const ZamundaCHAPI = require('../src/trackers/zamunda-ch');
 require('dotenv').config();
 
 async function testZamundaCH() {

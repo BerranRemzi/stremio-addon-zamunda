@@ -1,4 +1,4 @@
-const addon = require('../addon');
+const addon = require('../src/addon');
 require('dotenv').config();
 
 async function testAddon() {
