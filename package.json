@@ -1,6 +1,6 @@
 {
   "name": "stremio-zamunda-addon",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Stremio addon for streaming torrents from Zamunda.net",
   "main": "server.js",
   "scripts": {
