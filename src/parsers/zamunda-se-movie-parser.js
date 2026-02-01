@@ -71,34 +71,40 @@ class ZamundaSEMovieParser {
 	convertMoviesToTorrents(movies) {
 		return movies.map(movie => ({
 			title: movie.title,
-			sources: movie.torrentUrl,
-			infoHash: undefined
+			url: movie.url,
+			sources: movie.torrentUrl
 		}));
 	}
 
-	async formatTorrentsAsStreams(torrents, getTorrentBuffer) {
+	async formatTorrentsAsStreams(torrents, getDetailPageHtml) {
 		const streams = [];
 		
 		for (const torrent of torrents) {
 			try {
-				const torrentBuffer = await getTorrentBuffer(torrent.sources);
+				// Fetch detail page HTML to extract magnet link
+				const detailHtml = await getDetailPageHtml(torrent.url);
 				
-				if (!torrentBuffer) {
-					console.warn(`Failed to download torrent for ${torrent.title}`);
+				if (!detailHtml) {
+					console.warn(`Failed to fetch detail page for ${torrent.title}`);
 					continue;
 				}
 
-				const parsedTorrent = parseTorrent(torrentBuffer);
+				// Extract magnet link from HTML
+				const magnetRegex = /magnet:\?xt=urn:btih:([a-fA-F0-9]{40})/;
+				const magnetMatch = detailHtml.match(magnetRegex);
 				
-				if (!parsedTorrent || !parsedTorrent.infoHash) {
-					console.warn(`Failed to parse torrent for ${torrent.title}`);
+				if (!magnetMatch || !magnetMatch[1]) {
+					console.warn(`No magnet link found for ${torrent.title}`);
 					continue;
 				}
+
+				const infoHash = magnetMatch[1].toLowerCase();
+				console.log(`✓ Extracted info hash for ${torrent.title}: ${infoHash}`);
 
 				// Extract quality info from title
 				let quality = 'SD';
 				const titleUpper = torrent.title.toUpperCase();
-				const sourcesUpper = torrent.sources.toUpperCase();
+				const sourcesUpper = (torrent.sources || '').toUpperCase();
 				const combinedText = titleUpper + ' ' + sourcesUpper;
 				
 				if (combinedText.includes('2160P') || combinedText.includes('4K') || combinedText.includes('UHD')) {
@@ -129,7 +135,7 @@ class ZamundaSEMovieParser {
 				streams.push({
 					name: `zamunda.se\n${bgFlag}${quality}`,
 					title: torrent.title,
-					infoHash: parsedTorrent.infoHash.toLowerCase(),
+					infoHash: infoHash,
 					sources: [`tracker:${this.baseUrl}/announce`]
 				});
 			} catch (error) {
