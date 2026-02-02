@@ -56,7 +56,8 @@ class ZamundaMovieParser {
 							movies.push({
 								id: movieId,
 								title: title,
-								torrentUrl: null
+								torrentUrl: null,
+								magnetUrl: null
 							});
 						}
 					}
@@ -75,6 +76,9 @@ class ZamundaMovieParser {
 				}
 			});
 
+			// Extract magnet links
+			this.extractMagnetLinks(root, movies, html);
+
 			// Find and add seeders count - Multiple approaches for robustness
 			this.parseSeeders(root, movies, html);
 
@@ -88,6 +92,48 @@ class ZamundaMovieParser {
 		} catch (error) {
 			console.error('Error parsing movies:', error.message);
 			return [];
+		}
+	}
+
+	/**
+	 * Extract magnet links from HTML and associate them with movies
+	 * @param {Object} root - Parsed HTML root element
+	 * @param {Array} movies - Array of movie objects to update
+	 * @param {string} html - Raw HTML string
+	 */
+	extractMagnetLinks(root, movies, html) {
+		try {
+			// Look for magnet links in the HTML
+			// Common patterns: <a href="magnet:?xt=urn:btih:...">
+			const magnetLinks = root.querySelectorAll('a[href^="magnet:"]');
+			
+			if (magnetLinks.length > 0) {
+				magnetLinks.forEach((elem, i) => {
+					if (i < movies.length) {
+						const magnetHref = elem.getAttribute('href');
+						if (magnetHref && magnetHref.startsWith('magnet:')) {
+							movies[i].magnetUrl = magnetHref;
+						}
+					}
+				});
+				console.log(`[Zamunda] Extracted ${magnetLinks.length} magnet links`);
+			} else {
+				// Fallback: regex-based extraction if DOM parsing doesn't find magnet links
+				const magnetRegex = /href=["'](magnet:\?xt=urn:btih:[^"']+)["']/gi;
+				let match;
+				let index = 0;
+				
+				while ((match = magnetRegex.exec(html)) !== null && index < movies.length) {
+					movies[index].magnetUrl = match[1];
+					index++;
+				}
+				
+				if (index > 0) {
+					console.log(`[Zamunda] Extracted ${index} magnet links (via regex)`);
+				}
+			}
+		} catch (error) {
+			console.error('Error extracting magnet links:', error.message);
 		}
 	}
 
@@ -313,6 +359,7 @@ class ZamundaMovieParser {
 		return movies.map(movie => ({
 			title: `${movie.title}\n`,
 			url: movie.torrentUrl,
+			magnetUrl: movie.magnetUrl || null,
 			size: 'Unknown',
 			seeders: movie.seeders,
 			leechers: 'Unknown',
@@ -430,7 +477,18 @@ class ZamundaMovieParser {
 					}
 				}
 
-				// Fallback: return basic stream info without parsing
+				// Fallback 1: Use magnet link if available
+				if (torrent.magnetUrl) {
+					console.log(`[Zamunda] Using magnet link as fallback for: ${torrent.title.trim()}`);
+					return {
+						name: `zamunda\n${resolution}`,
+						title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'}`,
+						url: torrent.magnetUrl,
+						type: 'movie'
+					};
+				}
+
+				// Fallback 2: return basic stream info with torrent URL
 				return {
 					name: `zamunda\n${resolution}`,
 					title: `${torrent.title}${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''} 👤${torrent.seeders || 'Unknown'}`,
@@ -440,6 +498,19 @@ class ZamundaMovieParser {
 			} catch (error) {
 				console.error(`Error processing torrent: ${error.message}`);
 				const resolution = this.extractResolution(torrent.title);
+				
+				// On error, try magnet link first
+				if (torrent.magnetUrl) {
+					console.log(`[Zamunda] Using magnet link after error for: ${torrent.title.trim()}`);
+					return {
+						name: `zamunda\r\n${resolution}`,
+						title: `${torrent.title}\r\n${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''}`,
+						url: torrent.magnetUrl,
+						type: 'movie'
+					};
+				}
+				
+				// Final fallback to torrent URL
 				return {
 					name: `zamunda\r\n${resolution}`,
 					title: `${torrent.title}\r\n${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''}`,
