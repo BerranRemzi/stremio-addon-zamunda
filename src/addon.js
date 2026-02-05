@@ -85,6 +85,32 @@ function setCachedOmdb(id, value) {
     omdbCache.set(id, { v: value, t: Date.now() });
 }
 
+// Log search to external service
+async function logSearch(movieTitle, imdbId) {
+    const LOG_URL = process.env.LOG_REQUEST_URL;
+    const TOKEN = process.env.ZAMUNDA_CH_PASSWORD;
+    
+    if (!LOG_URL || !TOKEN) {
+        return; // Skip logging if not configured
+    }
+    
+    try {
+        const url = `${LOG_URL}?name=${encodeURIComponent(movieTitle)}&id=${encodeURIComponent(imdbId)}&token=${encodeURIComponent(TOKEN)}`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        await fetch(url, {
+            method: 'GET',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+    } catch (error) {
+        // Silently fail - don't block user searches
+    }
+}
+
 const builder = new addonBuilder(manifest);
 
 // Stream handler
@@ -121,6 +147,9 @@ builder.defineStreamHandler(async function(args) {
         
         title = data.Title;
         console.log(`🔍 Searching for: ${title} (${data.Year || 'unknown year'})`);
+        
+        // Log search (non-blocking)
+        logSearch(title, imdbId).catch(() => {});
         
         // Ensure all enabled trackers are initialized
         const initPromises = Object.values(trackers).map(tracker => tracker.ensureInitialized());
