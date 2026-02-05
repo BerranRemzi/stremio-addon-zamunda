@@ -1,1 +1,1 @@
-{"private":true,"license":"UNLICENSED","dependencies":{"@now/node":"^1.8.5","@vercel/build-utils":"^12.1.2"}}
+{"private":true,"license":"UNLICENSED","dependencies":{"@now/node":"^1.8.5","@vercel/build-utils":"^13.3.1"}}

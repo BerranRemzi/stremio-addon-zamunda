@@ -111,9 +111,8 @@ class ArenaBGAPI {
 				} else {
 					console.error('✗ ArenaBG login failed - no session cookie found');
 					console.log('Response status:', loginResponse.status);
-					// Still mark as logged in to allow search attempt
-					this.isLoggedIn = true;
-					return true;
+					// Do not mark as logged in when we have clear evidence of login failure
+					return false;
 				}
 			} catch (error) {
 				console.error('✗ ArenaBG login error:', error.message);
@@ -138,7 +137,11 @@ class ArenaBGAPI {
 	// Search method using the ArenaBG torrents URL structure
 	async search(query) {
 		try {
-			await this.ensureLoggedIn();
+			const loggedIn = await this.ensureLoggedIn();
+			if (!loggedIn) {
+				console.error('❌ [ArenaBG] Not logged in; aborting search.');
+				return [];
+			}
 
 			// ArenaBG torrents search URL: /bg/torrents/?text=query
 			const searchUrl = `${this.config.baseUrl}/bg/torrents/?text=${encodeURIComponent(query)}`;
@@ -311,7 +314,11 @@ class ArenaBGAPI {
 	 */
 	async getDownloadUrl(detailUrl) {
 		try {
-			await this.ensureLoggedIn();
+			const loggedIn = await this.ensureLoggedIn();
+			if (!loggedIn) {
+				console.error('[ArenaBG] Not logged in; cannot fetch detail page');
+				return null;
+			}
 			
 			// Fetch the detail page
 			const response = await this.client.get(detailUrl, {

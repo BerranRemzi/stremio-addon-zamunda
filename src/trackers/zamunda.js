@@ -124,7 +124,11 @@ class ZamundaAPI {
 	// Search method
 	async search(query) {
 		try {
-			await this.ensureLoggedIn();
+			const loggedIn = await this.ensureLoggedIn();
+			if (!loggedIn) {
+				console.error('❌ [Zamunda] Not logged in; aborting search.');
+				return [];
+			}
 
 			const searchUrl = `${this.config.baseUrl}/catalogs/movies?letter=&t=movie&search=${encodeURIComponent(query).replace(/%20/g, '+')}&field=name&comb=yes`;
 			
@@ -196,7 +200,7 @@ class ZamundaAPI {
 			return this.movieParser.convertMoviesToTorrents(filteredResults);
 		} catch (error) {
 			throw new Error(`Error searching by title: ${error.message}`);
-			return [];
+
 		}
 	}
 
@@ -278,8 +282,7 @@ class ZamundaAPI {
 			return await this.torrentManager.saveTorrentFile(torrentUrl, response.data);
 		} catch (error) {
 			throw new Error(`Error downloading torrent file: ${error.message}`);
-			// Return null instead of throwing to allow graceful degradation
-			return null;
+
 		}
 	}
 

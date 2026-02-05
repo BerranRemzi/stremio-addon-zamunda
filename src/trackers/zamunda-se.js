@@ -124,7 +124,11 @@ class ZamundaSEAPI {
 	// Search method
 	async search(query) {
 		try {
-			await this.ensureLoggedIn();
+			const loggedIn = await this.ensureLoggedIn();
+			if (!loggedIn) {
+				console.error('❌ [Zamunda.se] Not logged in; aborting search.');
+				return [];
+			}
 
 			const searchUrl = `${this.config.baseUrl}/catalogue.php?search=${encodeURIComponent(query).replace(/%20/g, '+')}&catalog=movies`;
 			
