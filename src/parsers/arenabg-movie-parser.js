@@ -1,5 +1,6 @@
 const { parse } = require('node-html-parser');
 const parseTorrent = require('parse-torrent');
+const { extractResolution } = require('../utils/resolutionExtractor');
 
 class ArenaBGMovieParser {
 	constructor(baseUrl = 'https://arenabg.com') {
@@ -349,44 +350,7 @@ class ArenaBGMovieParser {
 		}));
 	}
 
-	/**
-	 * Extract resolution from torrent URL or title
-	 * @param {string} text - Text to extract resolution from
-	 * @returns {string} Resolution string
-	 */
-	extractResolution(text) {
-		if (!text) return 'Unknown';
-		
-		const textLower = text.toLowerCase();
-		
-		// Check for 3D content first
-		const is3D = textLower.includes('3d') || textLower.includes('halfou') || textLower.includes('hsbs');
-		
-		// Single comprehensive regex to find any resolution
-		const resolutionMatch = text.match(/\b(8K|2160p|4K|UHD|1440p|2K|1080p|FHD|FullHD|Full HD|720p|HD|576p|480p|SD|bluray|blu-ray|blu ray|brrip|bdrip|webrip|web-rip|web\.rip|dvd|pal|ntsc|xvid|divx)\b/i);
-		
-		if (resolutionMatch) {
-			const match = resolutionMatch[1].toLowerCase();
-			
-			// Map the match to standard resolution
-			if (match.match(/^(8k|2160p|4k|uhd)$/)) return is3D ? '4K(3D)' : '4K';
-			if (match.match(/^(1440p|2k)$/)) return is3D ? '1440p(3D)' : '1440p';
-			if (match.match(/^(1080p|fhd|fullhd|full hd)$/)) return is3D ? '1080p(3D)' : '1080p';
-			if (match.match(/^(720p|hd)$/)) return is3D ? '720p(3D)' : '720p';
-			if (match.match(/^576p$/)) return is3D ? '576p(3D)' : '576p';
-			if (match.match(/^(480p|sd)$/)) return is3D ? '480p(3D)' : '480p';
-			if (match.match(/^(bluray|blu-ray|blu ray)$/)) return is3D ? '1080p(3D)' : '1080p';
-			if (match.match(/^(brrip|bdrip|webrip|web-rip|web\.rip)$/)) return is3D ? '720p(3D)' : '720p';
-			if (match.match(/^(dvd|pal|ntsc|xvid|divx)$/)) return is3D ? '480p(3D)' : '480p';
-		}
-		
-		// If 3D but no resolution found
-		if (is3D) {
-			return '3D';
-		}
-		
-		return 'Unknown';
-	}
+	// Note: extractResolution is now imported from shared utility
 
 	/**
 	 * Parse torrent buffer to extract metadata
@@ -438,9 +402,7 @@ class ArenaBGMovieParser {
 		const tasks = torrents.map((torrent) => withLimit(async () => {
 			try {
 				// Extract resolution from title (contains quality info like "1080p", "720p", etc.)
-				const resolution = this.extractResolution(torrent.title);
-
-				// Try to get torrent buffer
+					const resolution = extractResolution(torrent.title);
 				let torrentBuffer = null;
 				if (getTorrentBuffer) {
 					torrentBuffer = await getTorrentBuffer(torrent.url);
@@ -468,7 +430,7 @@ class ArenaBGMovieParser {
 				};
 			} catch (error) {
 				console.error(`Error processing torrent: ${error.message}`);
-				const resolution = this.extractResolution(torrent.title);
+					const resolution = extractResolution(torrent.title);
 				return {
 					name: `arenabg\r\n${resolution}`,
 					title: `${torrent.title}\r\n${torrent.hasBulgarianAudio ? ' 🇧🇬' : ''}`,

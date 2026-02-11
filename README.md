@@ -4,8 +4,9 @@ A Stremio addon that enables streaming torrents from Zamunda.net and ArenaBG.com
 
 ## ✨ Features
 
-- **Dual Tracker Support**: Search both Zamunda.net and ArenaBG.com simultaneously
-- **Movie Streaming**: Stream movies directly from Bulgarian torrent trackers
+- **Multi-Tracker Support**: Search Zamunda.net, Zamunda.ch, Zamunda.se, ArenaBG.com, and Zamunda.rip simultaneously
+- **Magnet Links**: Support for magnet link delivery (Zamunda.rip) alongside torrent files
+- **Movie Streaming**: Stream movies directly from Bulgarian and public torrent sources
 - **Smart Search**: Intelligent movie title matching with year filtering
 - **Resolution Detection**: Automatic detection of video quality (480p, 576p, 720p, 1080p, 1440p, 4K/2160p, 8K, 3D variants)
 - **Bulgarian Content**: Special support for Bulgarian audio and subtitles with 🇧🇬 flag
@@ -13,7 +14,8 @@ A Stremio addon that enables streaming torrents from Zamunda.net and ArenaBG.com
 - **Two-Step Download**: Smart handling of ArenaBG's detail page → download key extraction
 - **Torrent Metadata**: Displays seeders count, file size, and quality information
 - **In-Memory Caching**: Fast torrent file caching for improved performance
-- **Session Management**: Automatic login and session handling for both trackers
+- **Session Management**: Automatic login and session handling for authenticated trackers
+- **Public Tracker Support**: Zamunda.rip (no credentials required)
 - **OMDb Integration**: Optional OMDb API integration for better title resolution
 - **Serverless Support**: Deployable on Vercel/Now platform
 - **Error Resilience**: Robust error handling with fallback mechanisms
@@ -21,8 +23,9 @@ A Stremio addon that enables streaming torrents from Zamunda.net and ArenaBG.com
 ## 📋 Requirements
 
 - **Node.js**: Version 20 or higher
-- **Zamunda/ArenaBG Account**: Valid username and password (same credentials work for both Zamunda.net and ArenaBG.com)
+- **Tracker Credentials** (Optional): Valid Zamunda.net/Zamunda.ch/Zamunda.se and ArenaBG.com credentials (same for Zamunda trackers)
 - **OMDb API Key**: Optional, for enhanced movie title resolution
+- **Note**: Zamunda.rip works without credentials (public Torznab API)
 
 ## 🚀 Installation & Setup
 
@@ -44,12 +47,34 @@ Create a `.env` file in the project root with your configuration:
 # Server Configuration
 PORT=7000
 
-# Zamunda Credentials (Required)
-ZAMUNDA_USERNAME=your_username
-ZAMUNDA_PASSWORD=your_password
+# Tracker Configuration (Optional - enable trackers you want to use)
+ZAMUNDA_NET=true           # Zamunda.net (requires credentials)
+ZAMUNDA_CH=false          # Zamunda.ch (requires credentials, GET-based login)
+ZAMUNDA_SE=false          # Zamunda.se (requires credentials, HTTP protocol)
+ARENABG_COM=false         # ArenaBG.com (requires credentials, two-step download)
+ZAMUNDA_RIP=false         # Zamunda.rip (public API, no credentials needed)
+
+# Zamunda Credentials (Required if ZAMUNDA_NET=true)
+ZAMUNDA_NET_USERNAME=your_username
+ZAMUNDA_NET_PASSWORD=your_password
+
+# Zamunda.ch Credentials (Required if ZAMUNDA_CH=true, separate from Zamunda.net)
+ZAMUNDA_CH_USERNAME=your_username
+ZAMUNDA_CH_PASSWORD=your_password
+
+# Zamunda.se Credentials (Required if ZAMUNDA_SE=true)
+ZAMUNDA_SE_USERNAME=your_username
+ZAMUNDA_SE_PASSWORD=your_password
+
+# ArenaBG Credentials (Required if ARENABG_COM=true)
+ARENABG_USERNAME=your_username
+ARENABG_PASSWORD=your_password
 
 # OMDb API Key (Optional - improves title detection)
 OMDB_API_KEY=your_omdb_api_key
+
+# Logging (Optional - send search queries to external logging service)
+LOG_REQUEST_URL=https://your-logging-service.com/log
 ```
 
 ### 4. Run the Addon
@@ -105,11 +130,11 @@ The addon automatically deploys to Vercel when changes are committed to the repo
 The addon is configured with the following specifications:
 - **ID**: `org.stremio.zamunda`
 - **Name**: Zamunda
-- **Version**: `1.2.0`
+- **Version**: `2.0.0`
 - **Types**: Movies only
 - **Resources**: Streams
 - **ID Prefixes**: IMDb IDs (`tt`)
-- **Trackers**: Zamunda.net, ArenaBG.com
+- **Trackers**: Zamunda.net, Zamunda.ch, Zamunda.se, ArenaBG.com, Zamunda.rip
 
 ## 🏗️ Architecture
 
@@ -118,9 +143,14 @@ The addon is configured with the following specifications:
 ### Core Components
 
 - **`server.js`**: Main HTTP server using Stremio Addon SDK
-- **`addon.js`**: Addon interface definition and stream handler
+- **`addon.js`**: Addon interface definition and multi-tracker stream handler
 - **`zamunda.js`**: Zamunda.net API integration and authentication
-- **`zamunda-movie-parser.js`**: Zamunda HTML parsing and torrent processing
+- **`zamunda-ch.js`**: Zamunda.ch API integration (GET-based login)
+- **`zamunda-se.js`**: Zamunda.se API integration (HTTP protocol)
+- **`zamunda-rip.js`**: Zamunda.rip Torznab API integration (public, no auth)
+- **`zamunda-movie-parser.js`**: Zamunda.net/Zamunda.ch HTML parsing and torrent processing
+- **`zamunda-se-movie-parser.js`**: Zamunda.se HTML parsing (legacy structure)
+- **`zamunda-rip-parser.js`**: Torznab XML parsing and magnet link extraction
 - **`arenabg.js`**: ArenaBG.com API integration with two-step download handling
 - **`arenabg-movie-parser.js`**: ArenaBG HTML parsing with Bulgarian audio detection
 - **`torrentFileManager.js`**: In-memory torrent file caching
@@ -141,19 +171,30 @@ The addon is configured with the following specifications:
 ### Project Structure
 ```
 stremio-addon-zamunda/
-├── addon.js                   # Addon interface and dual-tracker stream handler
+├── addon.js                   # Addon interface and multi-tracker stream handler
 ├── server.js                  # Local development server
 ├── serverless.js              # Vercel serverless function
 ├── zamunda.js                 # Zamunda.net API integration
-├── zamunda-movie-parser.js    # Zamunda HTML parsing and torrent processing
+├── zamunda-ch.js              # Zamunda.ch API integration
+├── zamunda-se.js              # Zamunda.se API integration
+├── zamunda-rip.js             # Zamunda.rip Torznab API integration
+├── zamunda-movie-parser.js    # Zamunda.net/Zamunda.ch HTML parsing
+├── zamunda-se-movie-parser.js # Zamunda.se HTML parsing (legacy)
+├── zamunda-rip-parser.js      # Torznab XML parsing for Zamunda.rip
 ├── arenabg.js                 # ArenaBG.com API integration
 ├── arenabg-movie-parser.js    # ArenaBG HTML parsing with audio detection
 ├── torrentFileManager.js      # Torrent file caching
-├── test/                      # Test suite for both trackers
-│   ├── test-login.js          # Login functionality tests
+├── test/                      # Test suite for all trackers
+│   ├── test-login.js          # Zamunda/ArenaBG login tests
+│   ├── test-zamunda-ch.js     # Zamunda.ch GET-based login tests
+│   ├── test-zamunda-se.js     # Zamunda.se HTTP protocol tests
+│   ├── test-zamunda-rip.js    # Zamunda.rip Torznab API tests
 │   ├── test-live-search.js    # Live search tests
 │   ├── test-bulgarian-audio-flag.js  # Bulgarian audio detection tests
-│   └── test-download-keys.js  # ArenaBG download key extraction tests
+│   ├── test-download-keys.js  # ArenaBG download key extraction tests
+│   ├── test-search-by-title.js # Multi-tracker search tests
+│   ├── run-all-tests.js       # Complete test runner
+│   └── README.md              # Test documentation
 ├── package.json               # Dependencies and scripts
 ├── now.json                   # Vercel deployment configuration
 └── README.md                  # This file
@@ -162,9 +203,10 @@ stremio-addon-zamunda/
 ### Key Dependencies
 - **stremio-addon-sdk**: Stremio addon framework
 - **axios**: HTTP client with cookie support
-- **node-html-parser**: HTML parsing for Zamunda pages
+- **node-html-parser**: HTML/XML parsing for tracker pages and Torznab responses
 - **parse-torrent**: Torrent file metadata extraction
 - **dotenv**: Environment variable management
+- **node-fetch**: Fetch API for external logging (LOG_REQUEST_URL)
 
 ### Testing
 ```bash
@@ -211,6 +253,11 @@ The addon provides detailed console output for debugging:
 - **Cache Statistics**: Hit/miss rates and eviction tracking
 - **Automatic Eviction**: LRU-based cache management
 - **OMDb Caching**: 24-hour TTL for movie metadata
+
+### Parallel Tracker Searching
+- **Multi-Tracker Queries**: All enabled trackers searched simultaneously
+- **Independent Tracker Operation**: Failure in one tracker doesn't block others
+- **Automatic Fallback**: Results combined from all available trackers
 
 ### Concurrency Control
 - **Bounded Parallelism**: Maximum 3 concurrent torrent downloads

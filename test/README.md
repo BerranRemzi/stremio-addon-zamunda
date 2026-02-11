@@ -92,6 +92,21 @@ Tests Bulgarian audio detection and flag display.
 node test/test-bulgarian-audio-flag.js
 ```
 
+### 7. `test-zamunda-rip.js`
+Tests Zamunda.rip Torznab API integration.
+
+**Features:**
+- Tests Torznab API connectivity
+- Validates XML parsing and magnet link extraction
+- Tests title matching and year filtering
+- Verifies stream formatting with resolution detection
+- No credentials required (public API)
+
+**Run:**
+```bash
+node test/test-zamunda-rip.js
+```
+
 ## Test Data
 
 - `Търсене » ArenaBG.html` - Saved search results page for "sing 2 2021"

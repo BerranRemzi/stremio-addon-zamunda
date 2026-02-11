@@ -3,6 +3,7 @@ const ZamundaAPI = require('./trackers/zamunda');
 const ZamundaCHAPI = require('./trackers/zamunda-ch');
 const ZamundaSEAPI = require('./trackers/zamunda-se');
 const ArenaBGAPI = require('./trackers/arenabg');
+const ZamundaRIPAPI = require('./trackers/zamunda-rip');
 require('dotenv').config();
 
 // Use environment variables
@@ -13,7 +14,8 @@ const TRACKERS_ENABLED = {
     zamundaNet: process.env.ZAMUNDA_NET === 'true',
     zamundaCh: process.env.ZAMUNDA_CH === 'true',
     zamundaSe: process.env.ZAMUNDA_SE === 'true',
-    arenabg: process.env.ARENABG_COM === 'true'
+    arenabg: process.env.ARENABG_COM === 'true',
+    zamundaRip: process.env.ZAMUNDA_RIP === 'true'
 };
 
 // Initialize tracker APIs based on configuration
@@ -51,6 +53,11 @@ if (TRACKERS_ENABLED.arenabg) {
     });
 }
 
+// Initialize Zamunda.rip if enabled
+if (TRACKERS_ENABLED.zamundaRip) {
+    trackers.zamundaRip = new ZamundaRIPAPI({});
+}
+
 console.log('Enabled trackers:', Object.keys(trackers).join(', '));
 
 const manifest = {
@@ -83,32 +90,6 @@ function getCachedOmdb(id) {
 
 function setCachedOmdb(id, value) {
     omdbCache.set(id, { v: value, t: Date.now() });
-}
-
-// Log search to external service
-async function logSearch(movieTitle, imdbId) {
-    const LOG_URL = process.env.LOG_REQUEST_URL;
-    const TOKEN = process.env.ZAMUNDA_CH_PASSWORD;
-    
-    if (!LOG_URL || !TOKEN) {
-        return; // Skip logging if not configured
-    }
-    
-    try {
-        const url = `${LOG_URL}?name=${encodeURIComponent(movieTitle)}&id=${encodeURIComponent(imdbId)}&token=${encodeURIComponent(TOKEN)}`;
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        
-        await fetch(url, {
-            method: 'GET',
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-    } catch (error) {
-        // Silently fail - don't block user searches
-    }
 }
 
 const builder = new addonBuilder(manifest);
@@ -148,8 +129,15 @@ builder.defineStreamHandler(async function(args) {
         title = data.Title;
         console.log(`🔍 Searching for: ${title} (${data.Year || 'unknown year'})`);
         
-        // Log search (non-blocking)
-        logSearch(title, imdbId).catch(() => {});
+        // Log search via LOG_REQUEST_URL if configured
+        if (process.env.LOG_REQUEST_URL) {
+            try {
+                const logUrl = `${process.env.LOG_REQUEST_URL}?name=${encodeURIComponent(title)}&id=${encodeURIComponent(imdbId)}&year=${data.Year || 'unknown'}`;
+                fetch(logUrl, { method: 'GET', timeout: 3000 }).catch(() => {});
+            } catch (error) {
+                // Silently fail - don't block user searches
+            }
+        }
         
         // Ensure all enabled trackers are initialized
         const initPromises = Object.values(trackers).map(tracker => tracker.ensureInitialized());
@@ -197,6 +185,16 @@ builder.defineStreamHandler(async function(args) {
                 })
             );
             trackerNames.push('arenabg');
+        }
+        
+        if (trackers.zamundaRip) {
+            searchPromises.push(
+                trackers.zamundaRip.searchByTitle(data.Title, data.Year).catch(err => {
+                    console.error('Zamunda.rip search error:', err.message);
+                    return [];
+                })
+            );
+            trackerNames.push('zamundaRip');
         }
         
         const searchResults = await Promise.all(searchPromises);
