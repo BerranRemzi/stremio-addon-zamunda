@@ -91,7 +91,7 @@ class ZamundaRIPAPI {
 					}
 
 					// Movie id (guid) and year extraction
-					const movieId = guidEl?.text || null;
+					let movieId = guidEl?.text || null;
 					let year = null;
 					const yearMatch = title.match(/(19|20)\d{2}(?!p)/);
 					if (yearMatch) year = yearMatch[0];

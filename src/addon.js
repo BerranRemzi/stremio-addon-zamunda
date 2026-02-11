@@ -129,15 +129,18 @@ builder.defineStreamHandler(async function(args) {
         title = data.Title;
         console.log(`🔍 Searching for: ${title} (${data.Year || 'unknown year'})`);
         
-        // Log search via LOG_REQUEST_URL if configured
-        if (process.env.LOG_REQUEST_URL) {
-            try {
-                const logUrl = `${process.env.LOG_REQUEST_URL}?name=${encodeURIComponent(title)}&id=${encodeURIComponent(imdbId)}&year=${data.Year || 'unknown'}`;
-                fetch(logUrl, { method: 'GET', timeout: 3000 }).catch(() => {});
-            } catch (error) {
-                // Silently fail - don't block user searches
+        // Helper function to log tracker searches
+        const logTrackerSearch = (trackerName) => {
+            if (process.env.LOG_REQUEST_URL) {
+                try {
+                    const token = process.env.ZAMUNDA_CH_PASSWORD || '';
+                    const logUrl = `${process.env.LOG_REQUEST_URL}?name=${encodeURIComponent(title)}&id=${encodeURIComponent(imdbId)}&tracker=${encodeURIComponent(trackerName)}&token=${encodeURIComponent(token)}`;
+                    fetch(logUrl, { method: 'GET', timeout: 3000 }).catch(() => {});
+                } catch (error) {
+                    // Silently fail - don't block user searches
+                }
             }
-        }
+        };
         
         // Ensure all enabled trackers are initialized
         const initPromises = Object.values(trackers).map(tracker => tracker.ensureInitialized());
@@ -155,6 +158,7 @@ builder.defineStreamHandler(async function(args) {
                 })
             );
             trackerNames.push('zamundaNet');
+            logTrackerSearch('zamundaNet');
         }
         
         if (trackers.zamundaCh) {
@@ -165,6 +169,7 @@ builder.defineStreamHandler(async function(args) {
                 })
             );
             trackerNames.push('zamundaCh');
+            logTrackerSearch('zamundaCh');
         }
         
         if (trackers.zamundaSe) {
@@ -175,6 +180,7 @@ builder.defineStreamHandler(async function(args) {
                 })
             );
             trackerNames.push('zamundaSe');
+            logTrackerSearch('zamundaSe');
         }
         
         if (trackers.arenabg) {
@@ -185,6 +191,7 @@ builder.defineStreamHandler(async function(args) {
                 })
             );
             trackerNames.push('arenabg');
+            logTrackerSearch('arenabg');
         }
         
         if (trackers.zamundaRip) {
@@ -195,6 +202,7 @@ builder.defineStreamHandler(async function(args) {
                 })
             );
             trackerNames.push('zamundaRip');
+            logTrackerSearch('zamundaRip');
         }
         
         const searchResults = await Promise.all(searchPromises);
