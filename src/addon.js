@@ -99,9 +99,16 @@ builder.defineStreamHandler(async function(args) {
     let title = "Unknown Title";
     const imdbId = args.id.split(":")[0];
 
+    // Add overall timeout to prevent function invocation failures
+    const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 25000) // 25s to stay under 30s Vercel limit
+    );
+
     try {
-        // Get movie title from OMDB (with cache)
-        let data = getCachedOmdb(imdbId);
+        return await Promise.race([
+            (async () => {
+                // Get movie title from OMDB (with cache)
+                let data = getCachedOmdb(imdbId);
         if (!data) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -256,6 +263,9 @@ builder.defineStreamHandler(async function(args) {
             console.log(`No torrents found for ${data.Title} (${imdbId})`);
             return { streams: [] };
         }
+            })(),
+            timeoutPromise
+        ]);
     } catch (error) {
         console.error("Error fetching data:", error);
         return { streams: [] };
