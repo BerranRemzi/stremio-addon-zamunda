@@ -255,9 +255,7 @@ builder.defineStreamHandler(async function(args) {
             });
             
             console.log(`Total streams to return: ${allStreams.length}`);
-            if (allStreams.length > 0) {
-                console.log(`First stream sample:`, JSON.stringify(allStreams[0]).substring(0, 200));
-            }
+            
             return { streams: allStreams };
         } else {
             console.log(`No torrents found for ${data.Title} (${imdbId})`);

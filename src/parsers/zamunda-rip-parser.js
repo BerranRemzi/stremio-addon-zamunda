@@ -1,5 +1,4 @@
 const { parse } = require('node-html-parser');
-const parseTorrent = require('parse-torrent');
 
 class ZamundaRipParser {
 	constructor(baseUrl = 'https://zamunda.rip') {

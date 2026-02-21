@@ -191,31 +191,76 @@ class ZamundaRIPAPI {
 		});
 	}
 
-	// Format torrents as Stremio streams
+	// Format torrents as Stremio streams using proper Stream Object format
 	async formatTorrentsAsStreams(torrents) {
-		const streams = torrents.map((torrent) => {
+		const streams = [];
+		
+		for (const torrent of torrents) {
 			try {
 				// Extract resolution from torrent title
 				const resolution = extractResolution(torrent.title);
 
-				return {
-					name: `zamunda.rip\n${resolution}`,
-					title: torrent.title,
-					url: torrent.url,
-					type: 'movie'
-				};
+				// If it's a magnet link, extract infoHash and create Stremio stream
+				if (torrent.url && torrent.url.startsWith('magnet:')) {
+					const stream = this.createStreamFromMagnet(torrent.url, torrent.title);
+					if (stream) {
+						streams.push(stream);
+						continue;
+					}
+				}
+
+				// Fallback: if not magnet or extraction failed, try to return original URL
+				if (torrent.url) {
+					streams.push({
+						name: `zamunda.rip\n${resolution}`,
+						title: torrent.title,
+						url: torrent.url,
+						type: 'movie'
+					});
+				}
 			} catch (error) {
 				console.error(`Error formatting torrent: ${error.message}`);
-				return {
-					name: 'zamunda.rip',
-					title: torrent.title,
-					url: torrent.url,
-					type: 'movie'
-				};
 			}
-		});
+		}
 
 		return streams;
+	}
+
+	/**
+	 * Extract infoHash from magnet link and create Stremio stream
+	 * Magnet format: magnet:?xt=urn:btih:XXXXX where XXXXX is the infohash
+	 * @param {string} magnetLink - The magnet link
+	 * @param {string} title - Movie title
+	 * @returns {object|null} Stream object with infoHash or null on failure
+	 */
+	createStreamFromMagnet(magnetLink, title) {
+		try {
+			// Extract infoHash directly from magnet link
+			const infoHashMatch = magnetLink.match(/urn:btih:([a-zA-Z0-9]+)/i);
+			if (!infoHashMatch || !infoHashMatch[1]) {
+				console.warn(`❌ [Zamunda.rip] Could not extract infoHash from: ${magnetLink.substring(0, 50)}...`);
+				return null;
+			}
+
+			const infoHash = infoHashMatch[1].toLowerCase();
+			const resolution = extractResolution(title);
+
+			// Create proper Stremio Stream Object using infoHash
+			const stream = {
+				name: `zamunda.rip\n${resolution}`,
+				title: title,
+				infoHash: infoHash,
+				fileIdx: 0,  // Largest video file by default
+				type: 'movie'
+			};
+
+			console.log(`✅ [Zamunda.rip] Created stream with infoHash: ${infoHash.substring(0, 12)}...`);
+			
+			return stream;
+		} catch (error) {
+			console.error(`❌ [Zamunda.rip] Failed to create stream from magnet: ${error.message}`);
+			return null;
+		}
 	}
 }
 module.exports = ZamundaRIPAPI;
